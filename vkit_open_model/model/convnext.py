@@ -93,9 +93,18 @@ class ConvNextBlock(nn.Module):
 class ConvNext(nn.Module):
 
     @staticmethod
-    def build_stem(stem_in_channels: int, block_in_channels: int):
+    def build_stem(
+        stem_in_channels: int,
+        block_in_channels: int,
+        use_pconv2x2: bool,
+    ):
+        if not use_pconv2x2:
+            pconv = helper.pconv4x4(in_channels=stem_in_channels, out_channels=block_in_channels)
+        else:
+            pconv = helper.pconv2x2(in_channels=stem_in_channels, out_channels=block_in_channels)
+
         return nn.Sequential(
-            helper.pconv4x4(in_channels=stem_in_channels, out_channels=block_in_channels),
+            pconv,
             helper.permute_bchw_to_bhwc(),
             helper.ln(in_channels=block_in_channels),
             helper.permute_bhwc_to_bchw(),
@@ -129,12 +138,14 @@ class ConvNext(nn.Module):
         self,
         stem_in_channels: int,
         block_in_channels_and_num_layers: Sequence[Tuple[int, int]],
+        stem_use_pconv2x2: bool,
     ):
         super().__init__()
 
         self.stem = self.build_stem(
             stem_in_channels=stem_in_channels,
             block_in_channels=block_in_channels_and_num_layers[0][0],
+            use_pconv2x2=stem_use_pconv2x2,
         )
         self.blocks = self.build_blocks(block_in_channels_and_num_layers)
 
@@ -145,7 +156,7 @@ class ConvNext(nn.Module):
                     nn.init.zeros_(module.bias)
 
     @staticmethod
-    def create_tiny():
+    def create_tiny(stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -153,11 +164,12 @@ class ConvNext(nn.Module):
                 (192, 3),
                 (384, 9),
                 (768, 3),
-            )
+            ),
+            stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
     @staticmethod
-    def create_small():
+    def create_small(stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -165,11 +177,12 @@ class ConvNext(nn.Module):
                 (192, 3),
                 (384, 27),
                 (768, 3),
-            )
+            ),
+            stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
     @staticmethod
-    def create_base():
+    def create_base(stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -177,11 +190,12 @@ class ConvNext(nn.Module):
                 (256, 3),
                 (512, 27),
                 (1024, 3),
-            )
+            ),
+            stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
     @staticmethod
-    def create_large():
+    def create_large(stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -189,7 +203,8 @@ class ConvNext(nn.Module):
                 (384, 3),
                 (768, 27),
                 (1536, 3),
-            )
+            ),
+            stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:  # type: ignore
