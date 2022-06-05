@@ -1,0 +1,27 @@
+{
+    "include": [
+        "vkit",
+        "vkit_sln/vkit_lexicon",
+        "vkit_sln/vkit_font",
+        "tests",
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "vkit_sln/email_potential_users",
+    ],
+    "stubPath": ".github/typings",
+    "pythonVersion": "3.8",
+    "pythonPlatform": "Linux",
+    "typeCheckingMode": "strict",
+    "extraPaths": [],
+    "reportUnknownParameterType": false,
+    "reportUnknownVariableType": false,
+    "reportUnknownMemberType": false,
+    "reportUnknownArgumentType": false,
+    "reportUnknownLambdaType": false,
+    "reportMissingTypeArgument": false,
+    "reportUnusedImport": false,
+    "reportMissingTypeStubs": false,
+    "reportImportCycles": false,
+}
