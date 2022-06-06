@@ -16,6 +16,7 @@ def conv3x3(in_channels: int, out_channels: int):
         in_channels=in_channels,
         out_channels=out_channels,
         kernel_size=3,
+        padding=1,
     )
 
 
