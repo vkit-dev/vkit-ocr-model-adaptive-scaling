@@ -24,22 +24,22 @@ class AdaptiveScaling(nn.Module):
         if size == AdaptiveScalingSize.TINY:
             backbone_creator = ConvNext.create_tiny
             head_creator = UperNext.create_tiny
-            head_mid_channels = 32
+            head_mid_channels = 16
 
         elif size == AdaptiveScalingSize.SMALL:
             backbone_creator = ConvNext.create_small
             head_creator = UperNext.create_small
-            head_mid_channels = 32
+            head_mid_channels = 16
 
         elif size == AdaptiveScalingSize.BASE:
             backbone_creator = ConvNext.create_base
             head_creator = UperNext.create_base
-            head_mid_channels = 64
+            head_mid_channels = 32
 
         elif size == AdaptiveScalingSize.LARGE:
             backbone_creator = ConvNext.create_large
             head_creator = UperNext.create_large
-            head_mid_channels = 128
+            head_mid_channels = 64
 
         else:
             raise NotImplementedError()
