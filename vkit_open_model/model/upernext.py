@@ -123,37 +123,37 @@ class UperNext(nn.Module):
                     nn.init.zeros_(module.bias)
 
     @staticmethod
-    def create_tiny(out_channels: int):
+    def create_tiny(out_channels: int, mid_channels: int = 512):
         return UperNext(
             in_channels_group=(96, 192, 384, 768),
-            mid_channels=512,
+            mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
         )
 
     @staticmethod
-    def create_small(out_channels: int):
+    def create_small(out_channels: int, mid_channels: int = 512):
         return UperNext(
             in_channels_group=(96, 192, 384, 768),
-            mid_channels=512,
+            mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
         )
 
     @staticmethod
-    def create_base(out_channels: int):
+    def create_base(out_channels: int, mid_channels: int = 512):
         return UperNext(
             in_channels_group=(192, 384, 768, 1536),
-            mid_channels=512,
+            mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
         )
 
     @staticmethod
-    def create_large(out_channels: int):
+    def create_large(out_channels: int, mid_channels: int = 512):
         return UperNext(
             in_channels_group=(256, 512, 1024, 2048),
-            mid_channels=512,
+            mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
         )
