@@ -116,6 +116,12 @@ class UperNext(nn.Module):
             ),
         )
 
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                nn.init.trunc_normal_(module.weight, std=0.02)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
     @staticmethod
     def create_tiny(out_channels: int):
         return UperNext(

@@ -74,7 +74,7 @@ def permute_bhwc_to_bchw():
 
 
 def ln(in_channels: int):
-    return nn.LayerNorm(in_channels, eps=1e-6)
+    return nn.LayerNorm(in_channels, eps=1E-6)
 
 
 def gelu():

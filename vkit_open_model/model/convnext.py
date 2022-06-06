@@ -24,7 +24,7 @@ class ConvNextBlockLayer(nn.Module):
             helper.conv1x1(in_channels=4 * in_channels, out_channels=in_channels),
             helper.permute_bhwc_to_bchw(),
         )
-        self.block_scale = nn.parameter.Parameter(torch.ones(in_channels, 1, 1) * 1e-6)
+        self.block_scale = nn.parameter.Parameter(torch.ones(in_channels, 1, 1) * 1E-6)
         self.prob_bypass = prob_bypass
 
     def apply_stochastic_depth(self, x: torch.Tensor) -> torch.Tensor:
