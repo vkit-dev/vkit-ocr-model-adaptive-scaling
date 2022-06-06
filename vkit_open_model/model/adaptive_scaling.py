@@ -18,7 +18,7 @@ class AdaptiveScalingSize(Enum):
 
 class AdaptiveScaling(nn.Module):
 
-    def __init__(self, size: AdaptiveScalingSize, stem_use_pconv2x2: bool):
+    def __init__(self, size: AdaptiveScalingSize):
         super().__init__()
 
         if size == AdaptiveScalingSize.TINY:
@@ -44,37 +44,25 @@ class AdaptiveScaling(nn.Module):
         else:
             raise NotImplementedError()
 
-        self.backbone = backbone_creator(stem_use_pconv2x2=stem_use_pconv2x2)
+        self.backbone = backbone_creator(stem_use_pconv2x2=True)
         self.mask_head = head_creator(out_channels=1, mid_channels=head_mid_channels)
         self.scale_head = head_creator(out_channels=1, mid_channels=head_mid_channels)
 
     @staticmethod
-    def create_tiny(stem_use_pconv2x2: bool = False):
-        return AdaptiveScaling(
-            size=AdaptiveScalingSize.TINY,
-            stem_use_pconv2x2=stem_use_pconv2x2,
-        )
+    def create_tiny():
+        return AdaptiveScaling(size=AdaptiveScalingSize.TINY)
 
     @staticmethod
-    def create_small(stem_use_pconv2x2: bool = False):
-        return AdaptiveScaling(
-            size=AdaptiveScalingSize.SMALL,
-            stem_use_pconv2x2=stem_use_pconv2x2,
-        )
+    def create_small():
+        return AdaptiveScaling(size=AdaptiveScalingSize.SMALL)
 
     @staticmethod
-    def create_base(stem_use_pconv2x2: bool = False):
-        return AdaptiveScaling(
-            size=AdaptiveScalingSize.BASE,
-            stem_use_pconv2x2=stem_use_pconv2x2,
-        )
+    def create_base():
+        return AdaptiveScaling(size=AdaptiveScalingSize.BASE)
 
     @staticmethod
-    def create_large(stem_use_pconv2x2: bool = False):
-        return AdaptiveScaling(
-            size=AdaptiveScalingSize.LARGE,
-            stem_use_pconv2x2=stem_use_pconv2x2,
-        )
+    def create_large():
+        return AdaptiveScaling(size=AdaptiveScalingSize.LARGE)
 
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:  # type: ignore
         features = self.backbone(x)

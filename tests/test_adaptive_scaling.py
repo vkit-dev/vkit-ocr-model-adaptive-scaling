@@ -3,7 +3,7 @@ import torch
 
 
 def test_adaptive_scaling_jit():
-    model = AdaptiveScaling.create_tiny(stem_use_pconv2x2=True)
+    model = AdaptiveScaling.create_tiny()
     model_jit = torch.jit.script(model)  # type: ignore
 
     x = torch.rand((1, 3, 320, 320))
