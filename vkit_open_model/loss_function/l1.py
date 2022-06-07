@@ -1,7 +1,6 @@
 from typing import Optional
 
 import torch
-from torch.nn import functional as F
 
 
 class L1LossFunction:
