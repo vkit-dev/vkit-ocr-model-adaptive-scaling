@@ -1,11 +1,13 @@
 from typing import Optional
 
 import torch
+from torch.nn import functional as F
 
 
 class L1LossFunction:
 
-    def __init__(self, eps: float = 1E-6):
+    def __init__(self, eps: float = 1E-6, smooth: bool = False):
+        self.smooth = smooth
         self.eps = eps
 
     def __call__(
@@ -14,9 +16,13 @@ class L1LossFunction:
         gt: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
     ):
-        delta = torch.abs(pred - gt)
-        if mask is not None:
-            loss = (delta * mask).sum() / (mask.sum() + self.eps)
+        if not self.smooth:
+            torch_loss_func = F.l1_loss
         else:
-            loss = delta.mean()
-        return loss
+            torch_loss_func = F.smooth_l1_loss
+
+        if mask is None:
+            return torch_loss_func(pred, gt)
+        else:
+            loss = torch_loss_func(pred, gt, reduction='none')
+            return loss.sum() / (mask.sum() + self.eps)
