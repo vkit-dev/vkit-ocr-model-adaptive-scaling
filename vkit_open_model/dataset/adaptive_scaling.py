@@ -1,9 +1,10 @@
-from typing import Tuple, Generator, Optional, Iterable, Dict, List, Any
+from typing import Tuple, Generator, Optional, Iterable, Dict, List, Any, Union, Sequence
+from collections import abc
 import logging
 
 import numpy as np
 from numpy.random import RandomState
-from torch.utils.data import IterableDataset, default_collate
+from torch.utils.data import IterableDataset, default_collate, get_worker_info
 
 from vkit.element import Image, Mask, ScoreMap, Box
 from vkit.utility import PathType
@@ -54,7 +55,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         self,
         steps_json: PathType,
         num_steps: int,
-        rnd_seed: Optional[int] = None,
+        rnd_seed: Optional[Union[int, Sequence[int]]] = None,
     ):
         super().__init__()
 
@@ -67,11 +68,30 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
         self.num_steps = num_steps
         self.rnd_seed = rnd_seed
+        if isinstance(self.rnd_seed, abc.Sequence):
+            assert len(self.rnd_seed) == self.num_steps
+
+    def get_rnd(self, rnd: Optional[RandomState], rnd_seed_seq_idx: int):
+        if self.rnd_seed is None or isinstance(self.rnd_seed, int):
+            if rnd is None:
+                rnd = RandomState(self.rnd_seed)
+        else:
+            rnd = RandomState(self.rnd_seed[rnd_seed_seq_idx])
+            rnd_seed_seq_idx = (rnd_seed_seq_idx + 1) % len(self.rnd_seed)
+        return rnd, rnd_seed_seq_idx
 
     def __iter__(self):
-        rnd = RandomState(self.rnd_seed)
-        num_steps = self.num_steps
+        worker_info = get_worker_info()
+        if worker_info is None:
+            num_steps = self.num_steps
+            rnd_seed_seq_idx = 0
+        else:
+            num_steps = self.num_steps // worker_info.num_workers
+            rnd_seed_seq_idx = worker_info.id * num_steps
+
+        rnd = None
         while num_steps > 0:
+            rnd, rnd_seed_seq_idx = self.get_rnd(rnd, rnd_seed_seq_idx)
             try:
                 for sample in self.pipeline.run(rnd):
                     yield sample

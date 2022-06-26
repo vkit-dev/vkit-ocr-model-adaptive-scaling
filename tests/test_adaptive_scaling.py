@@ -18,17 +18,40 @@ def test_adaptive_scaling_jit():
     assert scale_feature.shape == (1, 1, 160, 160)
 
 
-def debug_adaptive_scaling_dataset():
+def profile_adaptive_scaling_dataset(num_workers: int, batch_size: int, epoch_size: int):
+    from datetime import datetime
+    from tqdm import tqdm
+    import numpy as np
+
+    num_steps = batch_size * epoch_size
+    rnd_seed = list(range(num_steps))
+
     data_loader = DataLoader(
         dataset=AdaptiveScalingIterableDataset(
             steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
-            num_steps=20,
+            num_steps=num_steps,
+            rnd_seed=rnd_seed,
         ),
-        batch_size=3,
-        num_workers=2,
+        batch_size=batch_size,
+        num_workers=num_workers,
         collate_fn=adaptive_scaling_dataset_collate_fn,
+        persistent_workers=True,
     )
-    data_loader_it = iter(data_loader)
-    batch = next(data_loader_it)
-    assert batch
-    breakpoint()
+
+    dt_batches = []
+    dt_begin = datetime.now()
+    for _ in tqdm(data_loader):
+        dt_batches.append(datetime.now())
+    dt_end = datetime.now()
+
+    dt_delta = dt_end - dt_begin
+    print('total:', dt_delta.seconds)
+    print('per_batch:', dt_delta.seconds / batch_size)
+    dt_batch_deltas = []
+    for idx, dt_batch in enumerate(dt_batches):
+        if idx == 0:
+            dt_prev = dt_begin
+        else:
+            dt_prev = dt_batches[idx - 1]
+        dt_batch_deltas.append((dt_batch - dt_prev).seconds)
+    print('per_batch std:', float(np.std(dt_batch_deltas)))
