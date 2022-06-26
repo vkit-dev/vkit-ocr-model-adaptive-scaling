@@ -1,0 +1,96 @@
+## dataset performance profiling
+
+```bash
+# Once.
+docker pull swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8
+docker tag swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8 wden/wden:devel-cpu-ubuntu20.04-python3.8
+
+mkdir -p "$HOME"/container/vkit-open-model
+touch "$HOME"/container/vkit-open-model/bash_history
+touch "$HOME"/container/vkit-open-model/screen_daemon.log
+
+CUSTOMIZED_INIT_SH=$(
+cat << 'EOF'
+
+cd
+
+cd cache
+
+if [ ! -f 'torch-1.11.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cpu/torch-1.11.0%2Bcpu-cp38-cp38-linux_x86_64.whl
+fi
+if [ ! -f 'torch-1.11.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp38-cp38-linux_x86_64.whl
+fi
+
+if [ ! -f 'torchvision-0.12.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp38-cp38-linux_x86_64.whl
+fi
+if [ ! -f 'torchvision-0.12.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cu113/torchvision-0.12.0%2Bcu113-cp38-cp38-linux_x86_64.whl
+fi
+
+pip install 'torch-1.11.0+cpu-cp38-cp38-linux_x86_64.whl' 'torchvision-0.12.0+cpu-cp38-cp38-linux_x86_64.whl'
+
+cd
+
+
+if [ ! -d vkit-open-model ]; then
+    git clone git@github.com:vkit-x/vkit-open-model.git
+fi
+cd vkit-open-model
+direnv allow
+git pull
+pip install -e .'[dev]'
+
+cp -r /vkit-x/vkit-private-data/vkit_artifact_pack /dev/shm/
+
+cd
+
+EOF
+)
+echo "$CUSTOMIZED_INIT_SH" | tee "$HOME"/container/vkit-open-model/customized_init.sh > /dev/null
+
+CUSTOMIZED_REENTRANT_SH=$(
+cat << 'EOF'
+
+export VKIT_ARTIFACT_PACK="/dev/shm/vkit_artifact_pack"
+
+EOF
+)
+echo "$CUSTOMIZED_REENTRANT_SH" | tee "$HOME"/container/vkit-open-model/customized_reentrant.sh > /dev/null
+
+
+docker run \
+  --name vkit-open-model \
+  -d --rm -it \
+  --shm-size='13g' \
+  --network host \
+  --user "$(id -u):$(id -g)" \
+  -v "$HOME"/vkit-x:/vkit-x \
+  -e CD_DEFAULT_FOLDER=/vkit-x \
+  -v "$HOME"/.gitconfig:/etc/gitconfig:ro \
+  -v "$SSH_AUTH_SOCK":/run/ssh-auth.sock:shared \
+  -e SSH_AUTH_SOCK="/run/ssh-auth.sock" \
+  -e SSHD_PORT='2222' \
+  -e SSH_SOCKS5_PROXY="0.0.0.0:1081" \
+  -e APT_SET_MIRROR_TENCENT=1 \
+  -e PIP_SET_INDEX_TENCENT=1 \
+  -v "$HOME"/container/vkit-open-model/bash_history:/run/.bash_history \
+  -e HISTFILE='/run/.bash_history' \
+  -v "$HOME"/container/vkit-open-model/screen_daemon.log:/run/screen_daemon.log \
+  -e SCREEN_DAEMON_LOG='/run/screen_daemon.log' \
+  -v "$HOME"/container/vkit-open-model/customized_init.sh:/run/customized_init.sh \
+  -v "$HOME"/container/vkit-open-model/customized_reentrant.sh:/run/customized_reentrant.sh \
+  -e CUSTOMIZED_INIT_SH='/run/customized_init.sh'\
+  -e CUSTOMIZED_REENTRANT_SH='/run/customized_reentrant.sh'\
+  wden/wden:devel-cpu-ubuntu20.04-python3.8
+```
+
+```bash
+# Single process.
+fib tests/test_adaptive_scaling.py:profile_adaptive_scaling_dataset \
+    --num_workers="0" \
+    --batch_size="10" \
+    --epoch_size="320"
+```

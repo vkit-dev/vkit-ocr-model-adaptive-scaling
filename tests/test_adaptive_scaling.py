@@ -35,7 +35,6 @@ def profile_adaptive_scaling_dataset(num_workers: int, batch_size: int, epoch_si
         batch_size=batch_size,
         num_workers=num_workers,
         collate_fn=adaptive_scaling_dataset_collate_fn,
-        persistent_workers=True,
     )
 
     dt_batches = []
