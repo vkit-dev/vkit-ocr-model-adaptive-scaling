@@ -93,4 +93,21 @@ fib tests/test_adaptive_scaling.py:profile_adaptive_scaling_dataset \
     --num_workers="0" \
     --batch_size="10" \
     --epoch_size="320"
+
+OUTPUT <<
+total: 391
+per_batch: 39.1
+per_batch std: 0.8774018374581855
+OUTPUT
+
+fib tests/test_adaptive_scaling.py:profile_adaptive_scaling_dataset \
+    --num_workers="32" \
+    --batch_size="10" \
+    --epoch_size="320"
+
+OUTPUT <<
+total: 38
+per_batch: 3.8
+per_batch std: 0.5240691151937882
+OUTPUT
 ```
