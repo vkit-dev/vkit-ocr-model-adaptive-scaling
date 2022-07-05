@@ -7,11 +7,27 @@ from torch.nn import functional as F
 from . import helper
 
 
-def build_conv1x1_block(in_channels: int, out_channels: int):
+def build_conv1x1_block(in_channels: int, out_channels: int, no_ln: bool = False):
+    modules: List[torch.nn.Module] = [
+        helper.permute_bchw_to_bhwc(),
+        helper.conv1x1(in_channels=in_channels, out_channels=out_channels),
+    ]
+
+    if not no_ln:
+        modules.append(helper.ln(in_channels=out_channels))
+
+    modules.extend([
+        helper.permute_bhwc_to_bchw(),
+        helper.gelu(),
+    ])
+
+    return nn.Sequential(*modules)
+
+
+def build_conv1x1_no_ln_block(in_channels: int, out_channels: int):
     return nn.Sequential(
         helper.permute_bchw_to_bhwc(),
         helper.conv1x1(in_channels=in_channels, out_channels=out_channels),
-        helper.ln(in_channels=out_channels),
         helper.permute_bhwc_to_bchw(),
         helper.gelu(),
     )
@@ -74,6 +90,7 @@ class UperNext(nn.Module):
         mid_channels: int,
         ppm_scales: Sequence[int],
         out_channels: int,
+        init_output_bias: float = 0.0,
     ) -> None:
         super().__init__()
 
@@ -113,6 +130,7 @@ class UperNext(nn.Module):
             build_conv1x1_block(
                 in_channels=mid_channels,
                 out_channels=out_channels,
+                no_ln=True,
             ),
         )
 
@@ -122,40 +140,62 @@ class UperNext(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
+        nn.init.constant_(self.final_conv_block[1][1].bias, init_output_bias)  # type: ignore
+
     @staticmethod
-    def create_tiny(out_channels: int, mid_channels: int = 512):
+    def create_tiny(
+        out_channels: int,
+        mid_channels: int = 512,
+        init_output_bias: float = 0.0,
+    ):
         return UperNext(
             in_channels_group=(96, 192, 384, 768),
             mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
+            init_output_bias=init_output_bias,
         )
 
     @staticmethod
-    def create_small(out_channels: int, mid_channels: int = 512):
+    def create_small(
+        out_channels: int,
+        mid_channels: int = 512,
+        init_output_bias: float = 0.0,
+    ):
         return UperNext(
             in_channels_group=(96, 192, 384, 768),
             mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
+            init_output_bias=init_output_bias,
         )
 
     @staticmethod
-    def create_base(out_channels: int, mid_channels: int = 512):
+    def create_base(
+        out_channels: int,
+        mid_channels: int = 512,
+        init_output_bias: float = 0.0,
+    ):
         return UperNext(
             in_channels_group=(192, 384, 768, 1536),
             mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
+            init_output_bias=init_output_bias,
         )
 
     @staticmethod
-    def create_large(out_channels: int, mid_channels: int = 512):
+    def create_large(
+        out_channels: int,
+        mid_channels: int = 512,
+        init_output_bias: float = 0.0,
+    ):
         return UperNext(
             in_channels_group=(256, 512, 1024, 2048),
             mid_channels=mid_channels,
             ppm_scales=(1, 2, 3, 6),
             out_channels=out_channels,
+            init_output_bias=init_output_bias,
         )
 
     def forward(self, features: List[torch.Tensor]) -> torch.Tensor:  # type: ignore

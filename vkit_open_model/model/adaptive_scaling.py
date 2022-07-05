@@ -18,7 +18,11 @@ class AdaptiveScalingSize(Enum):
 
 class AdaptiveScaling(nn.Module):
 
-    def __init__(self, size: AdaptiveScalingSize):
+    def __init__(
+        self,
+        size: AdaptiveScalingSize,
+        init_scale_output_bias: float = 5.0,
+    ):
         super().__init__()
 
         if size == AdaptiveScalingSize.TINY:
@@ -46,7 +50,11 @@ class AdaptiveScaling(nn.Module):
 
         self.backbone = backbone_creator(stem_use_pconv2x2=True)
         self.mask_head = head_creator(out_channels=1, mid_channels=head_mid_channels)
-        self.scale_head = head_creator(out_channels=1, mid_channels=head_mid_channels)
+        self.scale_head = head_creator(
+            out_channels=1,
+            mid_channels=head_mid_channels,
+            init_output_bias=init_scale_output_bias,
+        )
 
     @staticmethod
     def create_tiny():
