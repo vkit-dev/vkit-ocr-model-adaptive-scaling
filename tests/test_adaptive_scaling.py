@@ -23,14 +23,14 @@ def profile_adaptive_scaling_dataset(num_workers: int, batch_size: int, epoch_si
     from tqdm import tqdm
     import numpy as np
 
-    num_steps = batch_size * epoch_size
-    rnd_seed = list(range(num_steps))
+    num_samples = batch_size * epoch_size
+    rng_seed = list(range(num_samples))
 
     data_loader = DataLoader(
         dataset=AdaptiveScalingIterableDataset(
             steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
-            num_steps=num_steps,
-            rnd_seed=rnd_seed,
+            num_samples=num_samples,
+            rng_seed=rng_seed,
         ),
         batch_size=batch_size,
         num_workers=num_workers,

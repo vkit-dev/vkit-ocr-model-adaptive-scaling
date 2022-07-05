@@ -1,10 +1,9 @@
 from typing import Tuple, Generator, Optional, Iterable, Dict, List, Any, Union, Sequence
-from collections import abc
 import logging
 
 import numpy as np
-from numpy.random import RandomState
-from torch.utils.data import IterableDataset, default_collate, get_worker_info
+from numpy.random import Generator as RandomGenerator
+from torch.utils.data import IterableDataset, default_collate
 
 from vkit.element import Image, Mask, ScoreMap, Box
 from vkit.utility import PathType
@@ -17,6 +16,7 @@ from vkit.pipeline import (
     PipelinePostProcessorFactory,
     Pipeline,
 )
+from vkit_open_model.train import SecondOrderRandomGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class AdaptiveScalingPipelinePostProcessor(
     ]
 ):  # yapf: disable
 
-    def generate_output(self, state: PipelineState, rnd: RandomState):
+    def generate_output(self, state: PipelineState, rng: RandomGenerator):
         page_cropping_step_output = state.get_pipeline_step_output(PageCroppingStep)
         for cropped_page in page_cropping_step_output.cropped_pages:
             downsampled_label = cropped_page.downsampled_label
@@ -54,8 +54,8 @@ class AdaptiveScalingIterableDataset(IterableDataset):
     def __init__(
         self,
         steps_json: PathType,
-        num_steps: int,
-        rnd_seed: Optional[Union[int, Sequence[int]]] = None,
+        num_samples: int,
+        rng_seed: Optional[Union[int, Sequence[int]]] = None,
     ):
         super().__init__()
 
@@ -66,40 +66,26 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         )
         logger.info('Pipeline created...')
 
-        self.num_steps = num_steps
-        self.rnd_seed = rnd_seed
-        if isinstance(self.rnd_seed, abc.Sequence):
-            assert len(self.rnd_seed) == self.num_steps
-
-    def get_rnd(self, rnd: Optional[RandomState], rnd_seed_seq_idx: int):
-        if self.rnd_seed is None or isinstance(self.rnd_seed, int):
-            if rnd is None:
-                rnd = RandomState(self.rnd_seed)
-        else:
-            rnd = RandomState(self.rnd_seed[rnd_seed_seq_idx])
-            rnd_seed_seq_idx = (rnd_seed_seq_idx + 1) % len(self.rnd_seed)
-        return rnd, rnd_seed_seq_idx
+        self.epoch_idx = 0
+        self.second_order_rng = SecondOrderRandomGenerator(
+            rng_seed=rng_seed,
+            num_samples=num_samples,
+        )
 
     def __iter__(self):
-        worker_info = get_worker_info()
-        if worker_info is None:
-            num_steps = self.num_steps
-            rnd_seed_seq_idx = 0
-        else:
-            num_steps = self.num_steps // worker_info.num_workers
-            rnd_seed_seq_idx = worker_info.id * num_steps
+        samples_queue: List[Sample] = []
 
-        rnd = None
-        while num_steps > 0:
-            rnd, rnd_seed_seq_idx = self.get_rnd(rnd, rnd_seed_seq_idx)
-            try:
-                for sample in self.pipeline.run(rnd):
-                    yield sample
-                    num_steps -= 1
-                    if num_steps <= 0:
-                        break
-            except Exception:
-                logger.exception('pipeline failed, retrying...')
+        for rng in self.second_order_rng.get_rngs(epoch_idx=self.epoch_idx):
+            if samples_queue:
+                yield samples_queue.pop()
+            else:
+                # Generate new samples based on rng.
+                try:
+                    samples_queue.extend(self.pipeline.run(rng))
+                except Exception:
+                    logger.exception('pipeline failed.')
+
+        self.epoch_idx += 1
 
 
 def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):

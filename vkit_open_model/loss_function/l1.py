@@ -25,4 +25,5 @@ class L1LossFunction:
             return torch_loss_func(pred, gt)
         else:
             loss = torch_loss_func(pred, gt, reduction='none')
+            loss *= mask
             return loss.sum() / (mask.sum() + self.eps)

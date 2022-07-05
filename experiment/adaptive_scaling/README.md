@@ -16,21 +16,21 @@ cd
 
 cd cache
 
-if [ ! -f 'torch-1.11.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
-    wget https://download.pytorch.org/whl/cpu/torch-1.11.0%2Bcpu-cp38-cp38-linux_x86_64.whl
+if [ ! -f 'torch-1.12.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cpu/torch-1.12.0%2Bcpu-cp38-cp38-linux_x86_64.whl
 fi
-if [ ! -f 'torch-1.11.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
-    wget https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp38-cp38-linux_x86_64.whl
-fi
-
-if [ ! -f 'torchvision-0.12.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
-    wget https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp38-cp38-linux_x86_64.whl
-fi
-if [ ! -f 'torchvision-0.12.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
-    wget https://download.pytorch.org/whl/cu113/torchvision-0.12.0%2Bcu113-cp38-cp38-linux_x86_64.whl
+if [ ! -f 'torch-1.12.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cu113/torch-1.12.0%2Bcu113-cp38-cp38-linux_x86_64.whl
 fi
 
-pip install 'torch-1.11.0+cpu-cp38-cp38-linux_x86_64.whl' 'torchvision-0.12.0+cpu-cp38-cp38-linux_x86_64.whl'
+if [ ! -f 'torchvision-0.13.0+cpu-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cpu/torchvision-0.13.0%2Bcpu-cp38-cp38-linux_x86_64.whl
+fi
+if [ ! -f 'torchvision-0.13.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
+    wget https://download.pytorch.org/whl/cu113/torchvision-0.13.0%2Bcu113-cp38-cp38-linux_x86_64.whl
+fi
+
+pip install 'torch-1.12.0+cpu-cp38-cp38-linux_x86_64.whl' 'torchvision-0.13.0+cpu-cp38-cp38-linux_x86_64.whl'
 
 cd
 

@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 
 
-class DiceLoss:
+class DiceLossFunction:
 
     def __init__(self, eps: float = 1E-6):
         self.eps = eps

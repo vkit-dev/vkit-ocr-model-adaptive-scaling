@@ -1,14 +1,11 @@
 {
     "include": [
-        "vkit",
-        "vkit_sln/vkit_lexicon",
-        "vkit_sln/vkit_font",
-        "tests",
+        "vkit_open_model",
+        "experiment",
+        "tests"
     ],
     "exclude": [
-        "**/node_modules",
-        "**/__pycache__",
-        "vkit_sln/email_potential_users",
+        "**/__pycache__"
     ],
     "stubPath": ".github/typings",
     "pythonVersion": "3.8",
@@ -24,4 +21,5 @@
     "reportUnusedImport": false,
     "reportMissingTypeStubs": false,
     "reportImportCycles": false,
+    "reportUnnecessaryIsInstance": false
 }

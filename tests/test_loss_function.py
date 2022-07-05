@@ -8,7 +8,7 @@ def test_losses():
         WeightedBceWithLogitsLossFunction(),
         L1LossFunction(),
         L1LossFunction(smooth=True),
-        DiceLoss(),
+        DiceLossFunction(),
     ]:
         pred = torch.randn(100, requires_grad=True)
         gt = torch.empty(100).random_(0, 2)
