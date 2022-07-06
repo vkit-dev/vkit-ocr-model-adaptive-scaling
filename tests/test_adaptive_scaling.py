@@ -22,9 +22,8 @@ def test_adaptive_scaling_jit():
 
 def test_adaptive_scaling_jit_loss_backward():
     model = AdaptiveScaling.create_tiny()
-    # model_jit = torch.jit.script(model)  # type: ignore
-    # del model
-    model_jit = model
+    model_jit = torch.jit.script(model)  # type: ignore
+    del model
 
     loss_function = AdaptiveScalingLossFunction()
 
