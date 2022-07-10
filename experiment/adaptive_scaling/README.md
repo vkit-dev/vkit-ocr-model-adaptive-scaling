@@ -1,9 +1,10 @@
-## dataset performance profiling
+# env
 
 ```bash
 # Once.
-docker pull swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8
-docker tag swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8 wden/wden:devel-cpu-ubuntu20.04-python3.8
+docker pull swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8 && docker tag swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cpu-ubuntu20.04-python3.8 wden/wden:devel-cpu-ubuntu20.04-python3.8
+
+docker pull swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cuda11.3.1-cudnn8-ubuntu20.04-python3.8 && docker tag swr.cn-east-3.myhuaweicloud.com/wden/wden:devel-cuda11.3.1-cudnn8-ubuntu20.04-python3.8 wden/wden:devel-cuda11.3.1-cudnn8-ubuntu20.04-python3.8
 
 mkdir -p "$HOME"/container/vkit-open-model
 touch "$HOME"/container/vkit-open-model/bash_history
@@ -13,6 +14,7 @@ CUSTOMIZED_INIT_SH=$(
 cat << 'EOF'
 
 cd
+
 
 cd cache
 
@@ -30,35 +32,41 @@ if [ ! -f 'torchvision-0.13.0+cu113-cp38-cp38-linux_x86_64.whl' ]; then
     wget https://download.pytorch.org/whl/cu113/torchvision-0.13.0%2Bcu113-cp38-cp38-linux_x86_64.whl
 fi
 
-pip install 'torch-1.12.0+cpu-cp38-cp38-linux_x86_64.whl' 'torchvision-0.13.0+cpu-cp38-cp38-linux_x86_64.whl'
+pip install 'torch-1.12.0+cu113-cp38-cp38-linux_x86_64.whl' 'torchvision-0.13.0+cu113-cp38-cp38-linux_x86_64.whl'
+
 
 cd
 
+if [ ! -d vkit ]; then
+    git clone git@github.com:vkit-x/vkit.git
+fi
+cd vkit
+git pull
+
+
+cd
 
 if [ ! -d vkit-open-model ]; then
     git clone git@github.com:vkit-x/vkit-open-model.git
 fi
 cd vkit-open-model
+
+echo 'export VKIT_ARTIFACT_PACK="/dev/shm/vkit_artifact_pack"' >> .envrc.private
 direnv allow
+
 git pull
+pip install -e ../vkit
 pip install -e .'[dev]'
+
+cd
+
 
 cp -r /vkit-x/vkit-private-data/vkit_artifact_pack /dev/shm/
 
-cd
 
 EOF
 )
 echo "$CUSTOMIZED_INIT_SH" | tee "$HOME"/container/vkit-open-model/customized_init.sh > /dev/null
-
-CUSTOMIZED_REENTRANT_SH=$(
-cat << 'EOF'
-
-export VKIT_ARTIFACT_PACK="/dev/shm/vkit_artifact_pack"
-
-EOF
-)
-echo "$CUSTOMIZED_REENTRANT_SH" | tee "$HOME"/container/vkit-open-model/customized_reentrant.sh > /dev/null
 
 
 docker run \
@@ -81,11 +89,11 @@ docker run \
   -v "$HOME"/container/vkit-open-model/screen_daemon.log:/run/screen_daemon.log \
   -e SCREEN_DAEMON_LOG='/run/screen_daemon.log' \
   -v "$HOME"/container/vkit-open-model/customized_init.sh:/run/customized_init.sh \
-  -v "$HOME"/container/vkit-open-model/customized_reentrant.sh:/run/customized_reentrant.sh \
   -e CUSTOMIZED_INIT_SH='/run/customized_init.sh'\
-  -e CUSTOMIZED_REENTRANT_SH='/run/customized_reentrant.sh'\
-  wden/wden:devel-cpu-ubuntu20.04-python3.8
+  wden/wden:devel-cuda11.3.1-cudnn8-ubuntu20.04-python3.8
 ```
+
+## dataset performance profiling
 
 ```bash
 # Single process.
@@ -121,3 +129,7 @@ fib tests/test_adaptive_scaling.py:sample_adaptive_scaling_dataset \
     --epoch_size="5"  \
     --output_folder="${VKIT_OPEN_MODEL_DATA}/sample_adaptive_scaling_dataset"
 ```
+
+
+## training
+
