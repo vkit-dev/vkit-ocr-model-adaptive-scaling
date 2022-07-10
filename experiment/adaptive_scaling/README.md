@@ -100,6 +100,7 @@ per_batch: 39.1
 per_batch std: 0.8774018374581855
 OUTPUT
 
+# All processes.
 fib tests/test_adaptive_scaling.py:profile_adaptive_scaling_dataset \
     --num_workers="32" \
     --batch_size="10" \
@@ -110,4 +111,13 @@ total: 38
 per_batch: 3.8
 per_batch std: 0.5240691151937882
 OUTPUT
+```
+
+
+```bash
+fib tests/test_adaptive_scaling.py:sample_adaptive_scaling_dataset \
+    --num_workers="0" \
+    --batch_size="20" \
+    --epoch_size="5"  \
+    --output_folder="${VKIT_OPEN_MODEL_DATA}/sample_adaptive_scaling_dataset"
 ```

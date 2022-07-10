@@ -64,7 +64,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
             steps=pipeline_step_collection_factory.create(steps_json),
             post_processor=adaptive_scaling_pipeline_post_processor_factory.create(),
         )
-        logger.info('Pipeline created...')
+        logger.info('Pipeline created.')
 
         self.epoch_idx = 0
         self.second_order_rng = SecondOrderRandomGenerator(
@@ -76,14 +76,19 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         samples_queue: List[Sample] = []
 
         for rng in self.second_order_rng.get_rngs(epoch_idx=self.epoch_idx):
-            if samples_queue:
-                yield samples_queue.pop()
-            else:
+            if not samples_queue:
                 # Generate new samples based on rng.
-                try:
-                    samples_queue.extend(self.pipeline.run(rng))
-                except Exception:
-                    logger.exception('pipeline failed.')
+                while True:
+                    try:
+                        samples_queue.extend(self.pipeline.run(rng))
+                        break
+                    except Exception:
+                        logger.exception('pipeline failed. retrying...')
+                        # Force new rng.
+                        rng.random()
+
+            assert samples_queue
+            yield samples_queue.pop()
 
         self.epoch_idx += 1
 
@@ -102,8 +107,9 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):
         downsampled_score_map,
     ) in batch:
         default_batch.append({
-            'image': image.mat,
-            'downsampled_mask': downsampled_mask.mat,
+            # (H, W, 3) -> (3, H, W).
+            'image': np.transpose(image.mat, axes=(2, 0, 1)).astype(np.float32),
+            'downsampled_mask': downsampled_mask.np_mask.astype(np.float32),
             'downsampled_score_map': downsampled_score_map.mat,
         })
         downsampled_shape = downsampled_shape
