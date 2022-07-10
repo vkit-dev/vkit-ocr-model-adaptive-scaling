@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 @attrs.define
 class EpochConfig:
-    num_epochs: int = 100
+    num_epochs: int = 98
     train_num_batches: int = 720
     train_batch_size: int = 3
     train_prefetch_factor: int = 4
@@ -49,12 +49,12 @@ class EpochConfig:
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 1E-3
+    adamw_lr: float = 3E-3
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
-    cosine_annealing_warm_restarts_t0: int = 20
+    cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 1E-5
+    cosine_annealing_warm_restarts_eta_min: float = 3E-5
 
 
 @attrs.define
