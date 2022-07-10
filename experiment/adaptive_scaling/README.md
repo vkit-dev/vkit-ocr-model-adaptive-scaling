@@ -133,3 +133,16 @@ fib tests/test_adaptive_scaling.py:sample_adaptive_scaling_dataset \
 
 ## training
 
+Sync pipeline conifg.
+
+```bash
+rsync -r "$VKIT_PRIVATE_DATA/vkit_artifact_pack/pipeline/text_detection/" "${VKIT_ARTIFACT_PACK}/pipeline/text_detection"
+```
+
+Train.
+
+```bash
+fib experiment/adaptive_scaling/train.py:train \
+    --adaptive_scaling_dataset_steps_json="${VKIT_ARTIFACT_PACK}/pipeline/text_detection/adaptive_scaling.json" \
+    --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210710"
+```

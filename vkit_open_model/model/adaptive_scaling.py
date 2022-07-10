@@ -33,7 +33,7 @@ class AdaptiveScaling(nn.Module):
         elif size == AdaptiveScalingSize.SMALL:
             backbone_creator = ConvNext.create_small
             head_creator = UperNext.create_small
-            head_mid_channels = 16
+            head_mid_channels = 32
 
         elif size == AdaptiveScalingSize.BASE:
             backbone_creator = ConvNext.create_base

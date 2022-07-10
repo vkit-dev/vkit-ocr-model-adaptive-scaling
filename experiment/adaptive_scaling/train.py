@@ -37,14 +37,14 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     num_epochs: int = 100
-    train_num_batches: int = 1000
-    train_batch_size: int = 32
+    train_num_batches: int = 1920
+    train_batch_size: int = 3
     train_prefetch_factor: int = 4
-    dev_num_batches: int = 100
-    dev_batch_size: int = 64
+    dev_num_batches: int = 192
+    dev_batch_size: int = 6
     dev_rng_seed: int = 13
     dev_prefetch_factor: int = 4
-    num_workers: int = multiprocessing.cpu_count()
+    num_workers: int = multiprocessing.cpu_count() // 2
     avg_num_batches: int = 50
 
 
@@ -82,9 +82,9 @@ class RestoreState:
 
 def train(
     adaptive_scaling_dataset_steps_json: str,
-    device_value: str,
-    adaptive_scaling_size: str,
     output_folder: str,
+    device_value: str = 'cuda',
+    adaptive_scaling_size: str = 'small',
     epoch_config_json: Optional[str] = None,
     optimizer_config_json: Optional[str] = None,
     loss_config_json: Optional[str] = None,
@@ -241,7 +241,7 @@ def train(
 
     best_dev_loss = float('inf')
 
-    while epoch_idx < EpochConfig.num_epochs:
+    while epoch_idx < epoch_config.num_epochs:
         logger.info('Training...')
         model_jit.train()
         torch.set_grad_enabled(True)
@@ -272,7 +272,7 @@ def train(
                     f'E={epoch_idx}, '
                     f'B={batch_idx}/{epoch_config.train_num_batches}, '
                     f'L={avg_loss:.5f}, '
-                    f'LR={optimizer_scheduler.get_last_lr():.6f}'
+                    f'LR={optimizer_scheduler.get_last_lr()[-1]:.6f}'
                 )
 
         logger.info('Evaluating...')
