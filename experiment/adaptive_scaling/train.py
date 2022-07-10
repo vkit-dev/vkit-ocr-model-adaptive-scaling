@@ -1,4 +1,5 @@
 from typing import Tuple, Mapping, Optional, List
+import itertools
 from enum import Enum, unique
 import logging
 import statistics
@@ -91,15 +92,14 @@ def train(
     restore_state_dict_path: Optional[str] = None,
     reset_epoch_idx: bool = False,
 ):
-    out_fd = io.folder(output_folder, reset=reset_output_folder)
-    assert not out_fd.exists()
-    out_fd.mkdir(parents=True)
+    out_fd = io.folder(output_folder, reset=reset_output_folder, touch=True)
     logger.info(f'out_fd = {out_fd}')
 
     # Logging to file.
     logger.addHandler(logging.FileHandler(out_fd / 'log.txt'))
-    logger_formatter = logging.Formatter('%(message)s [%(asctime)s]')
-    for logger_handler in logger.handlers:
+    # Set logging format.
+    logger_formatter = logging.Formatter('%(message)s   [%(asctime)s]')
+    for logger_handler in itertools.chain(logging.getLogger().handlers, logger.handlers):
         logger_handler.setFormatter(logger_formatter)
 
     # Config.
