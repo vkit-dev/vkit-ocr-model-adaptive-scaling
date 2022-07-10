@@ -39,8 +39,8 @@ class EpochConfig:
     train_num_batches: int = 720
     train_batch_size: int = 3
     train_prefetch_factor: int = 4
-    dev_num_batches: int = 180
-    dev_batch_size: int = 12
+    dev_num_batches: int = 90
+    dev_batch_size: int = 24
     dev_rng_seed: int = 13
     dev_prefetch_factor: int = 4
     num_workers: int = 8
@@ -49,12 +49,12 @@ class EpochConfig:
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 3E-3
+    adamw_lr: float = 2E-3
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
     cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 3E-5
+    cosine_annealing_warm_restarts_eta_min: float = 2E-5
 
 
 @attrs.define
