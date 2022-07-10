@@ -13,7 +13,7 @@ class AdaptiveScalingLossFunction:
     def __init__(
         self,
         negative_ratio: float = 3.0,
-        bce_factor: float = 5.0,
+        bce_factor: float = 2.0,
         dice_factor: float = 1.0,
         l1_factor: float = 1.0,
     ):

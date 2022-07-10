@@ -1,5 +1,4 @@
 from typing import Tuple, Mapping, Optional, List
-import multiprocessing
 from enum import Enum, unique
 import logging
 import statistics
@@ -37,25 +36,25 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     num_epochs: int = 100
-    train_num_batches: int = 1920
+    train_num_batches: int = 720
     train_batch_size: int = 3
     train_prefetch_factor: int = 4
-    dev_num_batches: int = 192
-    dev_batch_size: int = 6
+    dev_num_batches: int = 180
+    dev_batch_size: int = 12
     dev_rng_seed: int = 13
     dev_prefetch_factor: int = 4
-    num_workers: int = multiprocessing.cpu_count() // 2
+    num_workers: int = 8
     avg_num_batches: int = 50
 
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 4E-3
+    adamw_lr: float = 1E-3
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
-    adamw_weight_decay: float = 0.05
+    adamw_weight_decay: float = 0.01
     cosine_annealing_warm_restarts_t0: int = 20
     cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 4E-5
+    cosine_annealing_warm_restarts_eta_min: float = 1E-5
 
 
 @attrs.define
@@ -299,7 +298,7 @@ def train(
             if batch_idx % 4 == 0 or batch_idx == epoch_config.dev_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
-                    f'B={batch_idx}/{epoch_config.train_num_batches}, '
+                    f'B={batch_idx}/{epoch_config.dev_num_batches}, '
                     f'L={avg_loss:.5f}'
                 )
 
@@ -317,3 +316,5 @@ def train(
                 optimizer_scheduler_state_dict=optimizer_scheduler.state_dict(),
             )
             torch.save(attrs.asdict(restore_state), state_dict_path)
+
+        epoch_idx += 1
