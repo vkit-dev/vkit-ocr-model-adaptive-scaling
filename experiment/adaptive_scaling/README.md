@@ -69,7 +69,7 @@ EOF
 echo "$CUSTOMIZED_INIT_SH" | tee "$HOME"/container/vkit-open-model/customized_init.sh > /dev/null
 
 
-docker run \
+nvidia-docker run \
   --name vkit-open-model \
   -d --rm -it \
   --shm-size='13g' \
