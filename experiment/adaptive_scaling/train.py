@@ -82,6 +82,7 @@ class RestoreState:
 def train(
     adaptive_scaling_dataset_steps_json: str,
     output_folder: str,
+    reset_output_folder: bool = False,
     device_value: str = 'cuda',
     adaptive_scaling_size: str = 'small',
     epoch_config_json: Optional[str] = None,
@@ -90,13 +91,16 @@ def train(
     restore_state_dict_path: Optional[str] = None,
     reset_epoch_idx: bool = False,
 ):
-    out_fd = io.folder(output_folder)
+    out_fd = io.folder(output_folder, reset=reset_output_folder)
     assert not out_fd.exists()
     out_fd.mkdir(parents=True)
     logger.info(f'out_fd = {out_fd}')
 
     # Logging to file.
     logger.addHandler(logging.FileHandler(out_fd / 'log.txt'))
+    logger_formatter = logging.Formatter('%(message)s [%(asctime)s]')
+    for logger_handler in logger.handlers:
+        logger_handler.setFormatter(logger_formatter)
 
     # Config.
     epoch_config = dyn_structure(

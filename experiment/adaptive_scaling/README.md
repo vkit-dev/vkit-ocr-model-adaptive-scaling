@@ -144,5 +144,6 @@ Train.
 ```bash
 fib experiment/adaptive_scaling/train.py:train \
     --adaptive_scaling_dataset_steps_json="${VKIT_ARTIFACT_PACK}/pipeline/text_detection/adaptive_scaling.json" \
-    --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210710"
+    --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210710" \
+    --reset_output_folder
 ```
