@@ -24,15 +24,6 @@ def build_conv1x1_block(in_channels: int, out_channels: int, no_ln: bool = False
     return nn.Sequential(*modules)
 
 
-def build_conv1x1_no_ln_block(in_channels: int, out_channels: int):
-    return nn.Sequential(
-        helper.permute_bchw_to_bhwc(),
-        helper.conv1x1(in_channels=in_channels, out_channels=out_channels),
-        helper.permute_bhwc_to_bchw(),
-        helper.gelu(),
-    )
-
-
 def build_conv3x3_block(in_channels: int, out_channels: int):
     return nn.Sequential(
         helper.conv3x3(in_channels=in_channels, out_channels=out_channels),

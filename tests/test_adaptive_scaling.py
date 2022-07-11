@@ -4,7 +4,7 @@ import numpy as np
 import iolite as io
 
 from vkit.element import Box, Mask, ScoreMap, Image, Painter
-from vkit_open_model.model.adaptive_scaling import AdaptiveScaling
+from vkit_open_model.model.adaptive_scaling import AdaptiveScaling, AdaptiveScalingSize
 from vkit_open_model.dataset.adaptive_scaling import (
     adaptive_scaling_dataset_collate_fn,
     AdaptiveScalingIterableDataset,
@@ -13,7 +13,7 @@ from vkit_open_model.loss_function import AdaptiveScalingLossFunction
 
 
 def test_adaptive_scaling_jit():
-    model = AdaptiveScaling.create_tiny()
+    model = AdaptiveScaling(AdaptiveScalingSize.TINY)
     model_jit = torch.jit.script(model)  # type: ignore
 
     x = torch.rand((1, 3, 320, 320))
@@ -23,20 +23,22 @@ def test_adaptive_scaling_jit():
 
 
 def test_adaptive_scaling_jit_loss_backward():
-    model = AdaptiveScaling.create_tiny()
+    model = AdaptiveScaling(AdaptiveScalingSize.TINY)
     model_jit = torch.jit.script(model)  # type: ignore
     del model
 
     loss_function = AdaptiveScalingLossFunction()
 
-    x = torch.rand((2, 3, 640, 640))
-    mask_feature, scale_feature = model_jit(x)  # type: ignore
+    with torch.autograd.profiler.profile() as prof:
+        x = torch.rand((2, 3, 640, 640))
+        mask_feature, scale_feature = model_jit(x)  # type: ignore
+    print(prof.key_averages().table(sort_by="self_cpu_time_total"))  # type: ignore
 
     loss = loss_function(
         mask_feature=mask_feature,
         scale_feature=scale_feature,
         downsampled_mask=(torch.rand(2, 300, 300) > 0.5).float(),
-        downsampled_score_map=torch.rand(2, 300, 300) + 5.0,
+        downsampled_score_map=torch.rand(2, 300, 300) + 8.75,
         downsampled_shape=(320, 320),
         downsampled_core_box=Box(up=10, down=309, left=10, right=309),
     )
