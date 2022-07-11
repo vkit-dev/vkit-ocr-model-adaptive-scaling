@@ -135,9 +135,16 @@ class FpnHead(nn.Module):
         super().__init__()
 
         self.upsampling_factor = upsampling_factor
-        self.final_conv3x3 = helper.conv3x3(
+
+        inner_channels = (in_channels + out_channels) // 2
+        self.step1_conv3x3 = build_conv3x3_block(
             in_channels=in_channels,
-            out_channels=out_channels,
+            out_channels=inner_channels,
+        )
+        self.step2_conv1x1 = nn.Sequential(
+            helper.permute_bchw_to_bhwc(),
+            helper.conv1x1(in_channels=inner_channels, out_channels=out_channels),
+            helper.permute_bhwc_to_bchw(),
         )
 
         for module in self.modules():
@@ -146,7 +153,7 @@ class FpnHead(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-        nn.init.constant_(self.final_conv3x3.bias, init_output_bias)  # type: ignore
+        nn.init.constant_(self.step2_conv1x1[1].bias, init_output_bias)  # type: ignore
 
     def forward(self, fpn_neck_feature: torch.Tensor) -> torch.Tensor:  # type: ignore
         x = fpn_neck_feature
@@ -161,4 +168,6 @@ class FpnHead(nn.Module):
                 mode='nearest',
             )
 
-        return self.final_conv3x3(x)
+        x = self.step1_conv3x3(x)
+        x = self.step2_conv1x1(x)
+        return x
