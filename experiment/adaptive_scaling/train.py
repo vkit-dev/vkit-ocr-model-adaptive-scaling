@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class EpochConfig:
     num_epochs: int = 98
     train_num_batches: int = 720
-    train_batch_size: int = 3
+    train_batch_size: int = 6
     train_prefetch_factor: int = 4
     dev_num_batches: int = 90
     dev_batch_size: int = 24
@@ -50,12 +50,13 @@ class EpochConfig:
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 2E-3
+    adamw_lr: float = 3E-3
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
     cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 2E-5
+    cosine_annealing_warm_restarts_eta_min: float = 3E-5
+    clip_grad_norm_max_norm: float = 2.0
 
 
 @attrs.define
@@ -263,6 +264,11 @@ def train(
             )
             avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, float(loss))
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(  # type: ignore
+                model_jit.parameters(),
+                optimizer_config.clip_grad_norm_max_norm,
+            )
 
             optimizer.step()
             optimizer_scheduler.step(
