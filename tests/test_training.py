@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import IterableDataset, DataLoader, get_worker_info
 from numpy.random import default_rng
 
-from vkit_open_model.train import Metrics, SecondOrderRandomGenerator, setup_seeds
+from vkit_open_model.training import Metrics, SecondOrderRandomGenerator, setup_seeds
 
 
 @unique

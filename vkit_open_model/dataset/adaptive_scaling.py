@@ -16,7 +16,7 @@ from vkit.pipeline import (
     PipelinePostProcessorFactory,
     Pipeline,
 )
-from vkit_open_model.train import SecondOrderRandomGenerator
+from vkit_open_model.training import SecondOrderRandomGenerator
 
 logger = logging.getLogger(__name__)
 

@@ -147,3 +147,13 @@ fib experiment/adaptive_scaling/train.py:train \
     --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210711" \
     --reset_output_folder
 ```
+
+
+## demo
+
+```bash
+fib experiment/adaptive_scaling/demo.py:infer \
+    --model_jit_path="$VKIT_OPEN_MODEL_DATA/adaptive_scaling_default/20210711/model.jit" \
+    --image_file="$VKIT_OPEN_MODEL_DATA/adaptive_scaling_default/20210711/image.png" \
+    --output_folder="$VKIT_OPEN_MODEL_DATA/adaptive_scaling_default/20210711/image-demo"
+```

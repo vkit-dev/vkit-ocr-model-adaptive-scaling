@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
+from torchinfo import summary
 import numpy as np
 import iolite as io
 
@@ -24,6 +25,26 @@ def test_adaptive_scaling_jit():
     mask_feature, scale_feature = model_jit(x)  # type: ignore
     assert mask_feature.shape == (1, 1, 160, 160)
     assert scale_feature.shape == (1, 1, 160, 160)
+
+
+def debug_adaptive_scaling_jit_model_summary():
+    print('AdaptiveScaling(BASE, FPN)')
+    model = AdaptiveScaling(AdaptiveScalingSize.BASE, AdaptiveScalingNeckHeadType.FPN)
+    model.eval()
+    print('depth=1')
+    summary(model, input_size=(1, 3, 640, 40), depth=1)
+    print('depth=3')
+    summary(model, input_size=(1, 3, 640, 40), depth=3)
+    print()
+
+    print('AdaptiveScaling(BASE, UPERNEXT)')
+    model = AdaptiveScaling(AdaptiveScalingSize.BASE, AdaptiveScalingNeckHeadType.UPERNEXT)
+    model.eval()
+    print('depth=1')
+    summary(model, input_size=(1, 3, 640, 40), depth=1)
+    print('depth=3')
+    summary(model, input_size=(1, 3, 640, 40), depth=3)
+    print()
 
 
 def test_adaptive_scaling_jit_loss_backward():

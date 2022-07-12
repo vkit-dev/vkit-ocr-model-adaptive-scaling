@@ -10,7 +10,7 @@ import iolite as io
 import torch
 from torch.utils.data import DataLoader
 
-from vkit.utility import dyn_structure
+from vkit.utility import dyn_structure, PathType
 from vkit_open_model.model import (
     AdaptiveScaling,
     AdaptiveScalingSize,
@@ -21,7 +21,7 @@ from vkit_open_model.dataset import (
     AdaptiveScalingIterableDataset,
 )
 from vkit_open_model.loss_function import AdaptiveScalingLossFunction
-from vkit_open_model.train import (
+from vkit_open_model.training import (
     batch_to_device,
     device_is_cuda,
     enable_cudnn_benchmark,
@@ -231,17 +231,17 @@ def train(
 
     # Restore.
     if restore_state_dict_path:
-        train_state = dyn_structure(
+        restore_state = dyn_structure(
             torch.load(restore_state_dict_path, device=device),
             RestoreState,
         )
         if not reset_epoch_idx:
-            epoch_idx = train_state.epoch_idx
-        train_adaptive_scaling_dataset.epoch_idx = train_state.epoch_idx
-        model_jit.load_state_dict(train_state.model_jit_state_dict)
-        optimizer.load_state_dict(train_state.optimizer_state_dict)  # type: ignore
+            epoch_idx = restore_state.epoch_idx
+        train_adaptive_scaling_dataset.epoch_idx = restore_state.epoch_idx
+        model_jit.load_state_dict(restore_state.model_jit_state_dict)
+        optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
         optimizer_scheduler.load_state_dict(
-            train_state.optimizer_scheduler_state_dict  # type: ignore
+            restore_state.optimizer_scheduler_state_dict  # type: ignore
         )
 
     # Dataloader.
@@ -350,3 +350,46 @@ def train(
             torch.save(attrs.asdict(restore_state), state_dict_path)
 
         epoch_idx += 1
+
+
+def build_model_jit_from_state_dict_path(
+    state_dict_path: PathType,
+    model_config_json: Optional[str] = None,
+):
+    model_config = dyn_structure(
+        model_config_json,
+        ModelConfig,
+        support_path_type=True,
+        support_none_type=True,
+    )
+    logger.info('model_config:')
+    logger.info(attrs.asdict(model_config))
+
+    model = AdaptiveScaling(
+        size=model_config.size,
+        neck_head_type=model_config.neck_head_type,
+        init_scale_output_bias=model_config.init_scale_output_bias,
+    )
+    model_jit: torch.jit.ScriptModule = torch.jit.script(model)  # type: ignore
+    del model
+
+    restore_state = dyn_structure(
+        torch.load(state_dict_path, map_location='cpu'),
+        RestoreState,
+    )
+    model_jit.load_state_dict(restore_state.model_jit_state_dict)
+    model_jit.eval()
+
+    return model_jit
+
+
+def build_and_dump_model_jit_from_state_dict_path(
+    state_dict_path: PathType,
+    output_model_jit: PathType,
+    model_config_json: Optional[str] = None,
+):
+    model_jit = build_model_jit_from_state_dict_path(
+        state_dict_path=state_dict_path,
+        model_config_json=model_config_json,
+    )
+    torch.jit.save(model_jit, output_model_jit)  # type: ignore
