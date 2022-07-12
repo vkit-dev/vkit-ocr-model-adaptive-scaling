@@ -14,6 +14,7 @@ from vkit.utility import dyn_structure
 from vkit_open_model.model import (
     AdaptiveScaling,
     AdaptiveScalingSize,
+    AdaptiveScalingNeckHeadType,
 )
 from vkit_open_model.dataset import (
     adaptive_scaling_dataset_collate_fn,
@@ -46,6 +47,13 @@ class EpochConfig:
     dev_prefetch_factor: int = 4
     num_workers: int = 8
     avg_num_batches: int = 50
+
+
+@attrs.define
+class ModelConfig:
+    size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
+    neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
+    init_scale_output_bias: float = 8.75
 
 
 @attrs.define
@@ -86,8 +94,8 @@ def train(
     output_folder: str,
     reset_output_folder: bool = False,
     device_value: str = 'cuda',
-    adaptive_scaling_size: str = 'small',
     epoch_config_json: Optional[str] = None,
+    model_config_json: Optional[str] = None,
     optimizer_config_json: Optional[str] = None,
     loss_config_json: Optional[str] = None,
     restore_state_dict_path: Optional[str] = None,
@@ -113,6 +121,16 @@ def train(
     logger.info('epoch_config:')
     logger.info(attrs.asdict(epoch_config))
     io.write_json(out_fd / 'epoch_config.json', attrs.asdict(epoch_config), indent=2)
+
+    model_config = dyn_structure(
+        model_config_json,
+        ModelConfig,
+        support_path_type=True,
+        support_none_type=True,
+    )
+    logger.info('model_config:')
+    logger.info(attrs.asdict(model_config))
+    io.write_json(out_fd / 'model_config.json', attrs.asdict(model_config), indent=2)
 
     optimizer_config = dyn_structure(
         optimizer_config_json,
@@ -174,7 +192,11 @@ def train(
     )
 
     # Model.
-    model = AdaptiveScaling(size=AdaptiveScalingSize(adaptive_scaling_size))
+    model = AdaptiveScaling(
+        size=model_config.size,
+        neck_head_type=model_config.neck_head_type,
+        init_scale_output_bias=model_config.init_scale_output_bias,
+    )
     model_jit: torch.jit.ScriptModule = torch.jit.script(model)  # type: ignore
     model_jit = model_jit.to(device)
     del model

@@ -73,56 +73,72 @@ class PpmBlock(nn.Module):
         return output
 
 
-class UperNext(nn.Module):
+class UperNextNeck(nn.Module):
 
-    def __init__(
-        self,
+    @staticmethod
+    def build_step1_conv_blocks(
         in_channels_group: Sequence[int],
-        mid_channels: int,
         ppm_scales: Sequence[int],
-        out_channels: int,
-        init_output_bias: float = 0.0,
-    ) -> None:
-        super().__init__()
-
-        assert len(in_channels_group) > 1
-
+        inner_channels: int,
+    ):
         step1_conv_blocks: List[nn.Module] = []
+
+        # First to second to the last layer, conv1x1 block.
         for in_channels in in_channels_group[:-1]:
             step1_conv_blocks.append(
                 build_conv1x1_block(
                     in_channels=in_channels,
-                    out_channels=mid_channels,
+                    out_channels=inner_channels,
                 )
             )
-        self.step1_conv_blocks = nn.ModuleList(step1_conv_blocks)
 
-        self.step1_ppm_block = PpmBlock(
-            ppm_scales=ppm_scales,
-            in_channels=in_channels_group[-1],
-            out_channels=mid_channels,
+        # Last layer, PPM block.
+        step1_conv_blocks.append(
+            PpmBlock(
+                ppm_scales=ppm_scales,
+                in_channels=in_channels_group[-1],
+                out_channels=inner_channels,
+            )
         )
 
+        return nn.ModuleList(step1_conv_blocks)
+
+    @staticmethod
+    def build_step2_conv_blocks(
+        num_step1_conv_blocks: int,
+        inner_channels: int,
+    ):
         step2_conv_blocks: List[nn.Module] = []
-        for in_channels in in_channels_group[:-1]:
+        # Skip the last layer since it's already been applied conv3x3.
+        for _ in range(num_step1_conv_blocks - 1):
             step2_conv_blocks.append(
                 build_conv3x3_block(
-                    in_channels=mid_channels,
-                    out_channels=mid_channels,
+                    in_channels=inner_channels,
+                    out_channels=inner_channels,
                 )
             )
-        self.step2_conv_blocks = nn.ModuleList(step2_conv_blocks)
+        return nn.ModuleList(step2_conv_blocks)
 
-        self.final_conv_block = nn.Sequential(
-            build_conv3x3_block(
-                in_channels=len(in_channels_group) * mid_channels,
-                out_channels=mid_channels,
-            ),
-            build_conv1x1_block(
-                in_channels=mid_channels,
-                out_channels=out_channels,
-                no_ln=True,
-            ),
+    def __init__(
+        self,
+        in_channels_group: Sequence[int],
+        out_channels: int,
+        ppm_scales: Sequence[int] = (1, 2, 3, 6),
+    ) -> None:
+        super().__init__()
+
+        assert len(in_channels_group) > 1
+        assert out_channels % len(in_channels_group) == 0
+        inner_channels = out_channels // len(in_channels_group)
+
+        self.step1_conv_blocks = self.build_step1_conv_blocks(
+            in_channels_group=in_channels_group,
+            ppm_scales=ppm_scales,
+            inner_channels=inner_channels,
+        )
+        self.step2_conv_blocks = self.build_step2_conv_blocks(
+            num_step1_conv_blocks=len(self.step1_conv_blocks),
+            inner_channels=inner_channels,
         )
 
         for module in self.modules():
@@ -131,75 +147,15 @@ class UperNext(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-        nn.init.constant_(self.final_conv_block[1][1].bias, init_output_bias)  # type: ignore
-
-    @staticmethod
-    def create_tiny(
-        out_channels: int,
-        mid_channels: int = 512,
-        init_output_bias: float = 0.0,
-    ):
-        return UperNext(
-            in_channels_group=(96, 192, 384, 768),
-            mid_channels=mid_channels,
-            ppm_scales=(1, 2, 3, 6),
-            out_channels=out_channels,
-            init_output_bias=init_output_bias,
-        )
-
-    @staticmethod
-    def create_small(
-        out_channels: int,
-        mid_channels: int = 512,
-        init_output_bias: float = 0.0,
-    ):
-        return UperNext(
-            in_channels_group=(96, 192, 384, 768),
-            mid_channels=mid_channels,
-            ppm_scales=(1, 2, 3, 6),
-            out_channels=out_channels,
-            init_output_bias=init_output_bias,
-        )
-
-    @staticmethod
-    def create_base(
-        out_channels: int,
-        mid_channels: int = 512,
-        init_output_bias: float = 0.0,
-    ):
-        return UperNext(
-            in_channels_group=(192, 384, 768, 1536),
-            mid_channels=mid_channels,
-            ppm_scales=(1, 2, 3, 6),
-            out_channels=out_channels,
-            init_output_bias=init_output_bias,
-        )
-
-    @staticmethod
-    def create_large(
-        out_channels: int,
-        mid_channels: int = 512,
-        init_output_bias: float = 0.0,
-    ):
-        return UperNext(
-            in_channels_group=(256, 512, 1024, 2048),
-            mid_channels=mid_channels,
-            ppm_scales=(1, 2, 3, 6),
-            out_channels=out_channels,
-            init_output_bias=init_output_bias,
-        )
-
     def forward(self, features: List[torch.Tensor]) -> torch.Tensor:  # type: ignore
         num_features = len(features)
-        assert num_features == len(self.step1_conv_blocks) + 1
+        assert num_features == len(self.step1_conv_blocks)
 
         # Step 1.
-        outputs: List[torch.Tensor] = []
-        # Not the last layers.
-        for feature_idx, step1_conv_block in enumerate(self.step1_conv_blocks):
-            outputs.append(step1_conv_block(features[feature_idx]))
-        # Last layer.
-        outputs.append(self.step1_ppm_block(features[-1]))
+        outputs = [
+            step1_conv_block(features[feature_idx])
+            for feature_idx, step1_conv_block in enumerate(self.step1_conv_blocks)
+        ]
 
         # Upsampling & add to the previous layer.
         for feature_idx in range(num_features - 1, 0, -1):
@@ -224,6 +180,56 @@ class UperNext(nn.Module):
                 size=feature0_shape,
                 mode='bilinear',
             )
+        # (B, out_channels, H, W)
         outputs_cat = torch.cat(outputs, dim=1)
-        output = self.final_conv_block(outputs_cat)
-        return output
+        return outputs_cat
+
+
+class UperNextHead(nn.Module):
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        upsampling_factor: int = 1,
+        init_output_bias: float = 0.0,
+    ):
+        super().__init__()
+
+        self.upsampling_factor = upsampling_factor
+
+        inner_channels = (in_channels + out_channels) // 2
+        self.step1_conv3x3 = build_conv3x3_block(
+            in_channels=in_channels,
+            out_channels=inner_channels,
+        )
+        self.step2_conv1x1 = nn.Sequential(
+            helper.permute_bchw_to_bhwc(),
+            helper.conv1x1(in_channels=inner_channels, out_channels=out_channels),
+            helper.permute_bhwc_to_bchw(),
+        )
+
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                nn.init.trunc_normal_(module.weight, std=0.02)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+        nn.init.constant_(self.step2_conv1x1[1].bias, init_output_bias)  # type: ignore
+
+    def forward(self, fpn_neck_feature: torch.Tensor) -> torch.Tensor:  # type: ignore
+        x = fpn_neck_feature
+
+        if self.upsampling_factor > 1:
+            x = F.interpolate(
+                x,
+                size=(
+                    x.shape[-2] * self.upsampling_factor,
+                    x.shape[-1] * self.upsampling_factor,
+                ),
+                mode='bilinear',
+            )
+
+        x = self.step1_conv3x3(x)
+        x = self.step2_conv1x1(x)
+        return x

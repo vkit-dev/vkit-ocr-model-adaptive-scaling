@@ -4,7 +4,11 @@ import numpy as np
 import iolite as io
 
 from vkit.element import Box, Mask, ScoreMap, Image, Painter
-from vkit_open_model.model.adaptive_scaling import AdaptiveScaling, AdaptiveScalingSize
+from vkit_open_model.model.adaptive_scaling import (
+    AdaptiveScaling,
+    AdaptiveScalingSize,
+    AdaptiveScalingNeckHeadType,
+)
 from vkit_open_model.dataset.adaptive_scaling import (
     adaptive_scaling_dataset_collate_fn,
     AdaptiveScalingIterableDataset,
@@ -13,7 +17,7 @@ from vkit_open_model.loss_function import AdaptiveScalingLossFunction
 
 
 def test_adaptive_scaling_jit():
-    model = AdaptiveScaling(AdaptiveScalingSize.TINY)
+    model = AdaptiveScaling(AdaptiveScalingSize.TINY, AdaptiveScalingNeckHeadType.UPERNEXT)
     model_jit = torch.jit.script(model)  # type: ignore
 
     x = torch.rand((1, 3, 320, 320))
