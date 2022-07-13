@@ -6,6 +6,7 @@ import statistics
 import shutil
 
 import attrs
+import cattrs
 import iolite as io
 import torch
 from torch.utils.data import DataLoader
@@ -119,8 +120,8 @@ def train(
         support_none_type=True,
     )
     logger.info('epoch_config:')
-    logger.info(attrs.asdict(epoch_config))
-    io.write_json(out_fd / 'epoch_config.json', attrs.asdict(epoch_config), indent=2)
+    logger.info(cattrs.unstructure(epoch_config))
+    io.write_json(out_fd / 'epoch_config.json', cattrs.unstructure(epoch_config), indent=2)
 
     model_config = dyn_structure(
         model_config_json,
@@ -129,8 +130,8 @@ def train(
         support_none_type=True,
     )
     logger.info('model_config:')
-    logger.info(attrs.asdict(model_config))
-    io.write_json(out_fd / 'model_config.json', attrs.asdict(model_config), indent=2)
+    logger.info(cattrs.unstructure(model_config))
+    io.write_json(out_fd / 'model_config.json', cattrs.unstructure(model_config), indent=2)
 
     optimizer_config = dyn_structure(
         optimizer_config_json,
@@ -139,8 +140,8 @@ def train(
         support_none_type=True,
     )
     logger.info('optimizer_config:')
-    logger.info(attrs.asdict(optimizer_config))
-    io.write_json(out_fd / 'optimizer_config.json', attrs.asdict(optimizer_config), indent=2)
+    logger.info(cattrs.unstructure(optimizer_config))
+    io.write_json(out_fd / 'optimizer_config.json', cattrs.unstructure(optimizer_config), indent=2)
 
     loss_config = dyn_structure(
         loss_config_json,
@@ -149,8 +150,8 @@ def train(
         support_none_type=True,
     )
     logger.info('loss_config:')
-    logger.info(attrs.asdict(loss_config))
-    io.write_json(out_fd / 'loss_config.json', attrs.asdict(loss_config), indent=2)
+    logger.info(cattrs.unstructure(loss_config))
+    io.write_json(out_fd / 'loss_config.json', cattrs.unstructure(loss_config), indent=2)
 
     device = torch.device(device_value)
     logger.info(f'device = {device}')
@@ -347,7 +348,7 @@ def train(
                 optimizer_state_dict=optimizer.state_dict(),
                 optimizer_scheduler_state_dict=optimizer_scheduler.state_dict(),
             )
-            torch.save(attrs.asdict(restore_state), state_dict_path)
+            torch.save(cattrs.unstructure(restore_state), state_dict_path)
 
         epoch_idx += 1
 
@@ -363,7 +364,7 @@ def build_model_jit_from_state_dict_path(
         support_none_type=True,
     )
     logger.info('model_config:')
-    logger.info(attrs.asdict(model_config))
+    logger.info(cattrs.unstructure(model_config))
 
     model = AdaptiveScaling(
         size=model_config.size,
