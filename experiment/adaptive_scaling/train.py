@@ -233,12 +233,12 @@ def train(
     # Restore.
     if restore_state_dict_path:
         restore_state = dyn_structure(
-            torch.load(restore_state_dict_path, device=device),
+            torch.load(restore_state_dict_path, map_location='cpu'),
             RestoreState,
         )
         if not reset_epoch_idx:
-            epoch_idx = restore_state.epoch_idx
-        train_adaptive_scaling_dataset.epoch_idx = restore_state.epoch_idx
+            epoch_idx = restore_state.epoch_idx + 1
+        train_adaptive_scaling_dataset.epoch_idx = epoch_idx
         model_jit.load_state_dict(restore_state.model_jit_state_dict)
         optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
         optimizer_scheduler.load_state_dict(
