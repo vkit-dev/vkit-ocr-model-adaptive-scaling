@@ -39,8 +39,8 @@ class AdaptiveScalingPipelinePostProcessor(
                 cropped_page.page_image,
                 downsampled_label.shape,
                 downsampled_label.core_box,
-                downsampled_label.page_text_line_mask,
-                downsampled_label.page_text_line_height_score_map,
+                downsampled_label.page_char_mask,
+                downsampled_label.page_char_height_score_map,
             )
 
 
