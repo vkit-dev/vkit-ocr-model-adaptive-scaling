@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     num_epochs: int = 98
-    train_num_batches: int = 640
-    train_batch_size: int = 8
+    train_num_batches: int = 672
+    train_batch_size: int = 7
     train_prefetch_factor: int = 4
     dev_num_batches: int = 68
     dev_batch_size: int = 32
