@@ -59,7 +59,8 @@ class SecondOrderRandomGenerator:
                     init_rng = default_rng(worker_seed)
                     # Initialize seed for epoch.
                     for _ in range(epoch_idx):
-                        init_rng.random()
+                        for _ in range(1000):
+                            init_rng.random()
                     rng_seed = cast(int, init_rng.bit_generator.state['state']['state'])
                     logger.info(f'Initialize rng_seed={rng_seed} for worker_idx={worker_info.id}')
 
