@@ -101,6 +101,7 @@ def train(
     loss_config_json: Optional[str] = None,
     restore_state_dict_path: Optional[str] = None,
     reset_epoch_idx: bool = False,
+    torch_seed: int = 133,
 ):
     out_fd = io.folder(output_folder, reset=reset_output_folder, touch=True)
     logger.info(f'out_fd = {out_fd}')
@@ -157,7 +158,7 @@ def train(
     logger.info(f'device = {device}')
 
     # Init.
-    setup_seeds()
+    setup_seeds(torch_seed=torch_seed)
     enable_cudnn_benchmark(device)
     enable_cudnn_deterministic(device)
 
@@ -238,7 +239,6 @@ def train(
         )
         if not reset_epoch_idx:
             epoch_idx = restore_state.epoch_idx + 1
-        train_adaptive_scaling_dataset.epoch_idx = epoch_idx
         model_jit.load_state_dict(restore_state.model_jit_state_dict)
         optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
         optimizer_scheduler.load_state_dict(

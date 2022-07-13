@@ -76,16 +76,14 @@ class TestSecondOrderRandomGeneratorIterableDataset(IterableDataset):
     ):
         super().__init__()
 
-        self.epoch_idx = 0
         self.second_order_rng = SecondOrderRandomGenerator(
             rng_seed=rng_seed,
             num_samples=num_samples,
         )
 
     def __iter__(self):
-        for rng in self.second_order_rng.get_rngs(epoch_idx=self.epoch_idx):
+        for rng in self.second_order_rng.get_rngs():
             yield {'num': rng.integers(0, 1024)}
-        self.epoch_idx += 1
 
 
 def test_second_order_rng():

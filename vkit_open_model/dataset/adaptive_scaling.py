@@ -66,7 +66,6 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         )
         logger.info('Pipeline created.')
 
-        self.epoch_idx = 0
         self.second_order_rng = SecondOrderRandomGenerator(
             rng_seed=rng_seed,
             num_samples=num_samples,
@@ -75,7 +74,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
     def __iter__(self):
         samples_queue: List[Sample] = []
 
-        for rng in self.second_order_rng.get_rngs(epoch_idx=self.epoch_idx):
+        for rng in self.second_order_rng.get_rngs():
             if not samples_queue:
                 # Generate new samples based on rng.
                 while True:
@@ -89,8 +88,6 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
             assert samples_queue
             yield samples_queue.pop()
-
-        self.epoch_idx += 1
 
 
 def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):
