@@ -104,7 +104,7 @@ def test_second_order_rng():
             batches.append(batch['num'])
 
     assert len(batches) == 4
-    assert batches[0].tolist() == [935, 442, 279, 764, 740]
-    assert batches[1].tolist() == [280, 0, 1021, 185, 589]
-    assert batches[2].tolist() == [980, 722, 266, 599, 95]
-    assert batches[3].tolist() == [372, 820, 677, 442, 198]
+    assert batches[0].tolist() == [709, 884, 651, 745, 790]
+    assert batches[1].tolist() == [600, 986, 71, 882, 139]
+    assert batches[2].tolist() == [1002, 863, 670, 963, 431]
+    assert batches[3].tolist() == [145, 605, 697, 29, 306]
