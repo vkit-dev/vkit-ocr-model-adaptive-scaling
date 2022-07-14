@@ -53,7 +53,7 @@ class EpochConfig:
 @attrs.define
 class ModelConfig:
     size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
-    neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.UPERNEXT
+    neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
     init_scale_output_bias: float = 8.0
 
 
