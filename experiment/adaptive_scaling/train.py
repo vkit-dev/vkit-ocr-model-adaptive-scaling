@@ -4,6 +4,7 @@ from enum import Enum, unique
 import logging
 import statistics
 import shutil
+import math
 
 import attrs
 import cattrs
@@ -181,13 +182,14 @@ def train(
     shutil.copyfile(
         adaptive_scaling_dataset_steps_json, out_fd / 'adaptive_scaling_dataset_steps.json'
     )
+    dev_rng_seed = generate_iterable_dataset_rng_seeds(
+        num_samples=dev_num_samples,
+        rng_seed=epoch_config.dev_rng_seed,
+    )
     dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
         steps_json=adaptive_scaling_dataset_steps_json,
         num_samples=dev_num_samples,
-        rng_seed=generate_iterable_dataset_rng_seeds(
-            num_samples=dev_num_samples,
-            rng_seed=epoch_config.dev_rng_seed,
-        )
+        rng_seed=dev_rng_seed,
     )
     if not epoch_config.enable_overfit_testing:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
@@ -195,14 +197,12 @@ def train(
             num_samples=train_num_samples,
         )
     else:
-        assert train_num_samples == dev_num_samples
+        train_rng_seed = dev_rng_seed * math.ceil(train_num_samples / dev_num_samples)
+        train_rng_seed = train_rng_seed[:train_num_samples]
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
             steps_json=adaptive_scaling_dataset_steps_json,
             num_samples=train_num_samples,
-            rng_seed=generate_iterable_dataset_rng_seeds(
-                num_samples=train_num_samples,
-                rng_seed=epoch_config.dev_rng_seed,
-            )
+            rng_seed=train_rng_seed,
         )
 
     # Model.
@@ -341,7 +341,7 @@ def train(
             dev_losses.append(loss)
 
             avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, loss)
-            if batch_idx % 4 == 0 or batch_idx == epoch_config.dev_num_batches:
+            if batch_idx % 4 == 0 or batch_idx >= epoch_config.dev_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
                     f'B={batch_idx}/{epoch_config.dev_num_batches}, '
