@@ -312,7 +312,7 @@ def train(
             )
             optimizer.zero_grad()
 
-            if batch_idx % 4 == 0 or batch_idx == epoch_config.train_num_batches:
+            if batch_idx % 4 == 0 or batch_idx >= epoch_config.train_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
                     f'B={batch_idx}/{epoch_config.train_num_batches}, '
