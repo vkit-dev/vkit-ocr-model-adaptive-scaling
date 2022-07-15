@@ -195,7 +195,15 @@ def train(
             num_samples=train_num_samples,
         )
     else:
-        train_adaptive_scaling_dataset = dev_adaptive_scaling_dataset
+        assert train_num_samples == dev_num_samples
+        train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+            steps_json=adaptive_scaling_dataset_steps_json,
+            num_samples=train_num_samples,
+            rng_seed=generate_iterable_dataset_rng_seeds(
+                num_samples=train_num_samples,
+                rng_seed=epoch_config.dev_rng_seed,
+            )
+        )
 
     # Model.
     model = AdaptiveScaling(
@@ -259,21 +267,16 @@ def train(
         pin_memory=device_is_cuda(device),
         pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
-    if not epoch_config.enable_overfit_testing:
-        train_data_loader = DataLoader(
-            train_adaptive_scaling_dataset,
-            collate_fn=adaptive_scaling_dataset_collate_fn,
-            batch_size=epoch_config.train_batch_size,
-            num_workers=epoch_config.num_workers,
-            prefetch_factor=epoch_config.train_prefetch_factor,
-            pin_memory=device_is_cuda(device),
-            pin_memory_device=str(device) if device_is_cuda(device) else '',
-            persistent_workers=True,
-        )
-        train_num_batches = epoch_config.train_num_batches
-    else:
-        train_data_loader = dev_data_loader
-        train_num_batches = epoch_config.dev_num_batches
+    train_data_loader = DataLoader(
+        train_adaptive_scaling_dataset,
+        collate_fn=adaptive_scaling_dataset_collate_fn,
+        batch_size=epoch_config.train_batch_size,
+        num_workers=epoch_config.num_workers,
+        prefetch_factor=epoch_config.train_prefetch_factor,
+        pin_memory=device_is_cuda(device),
+        pin_memory_device=str(device) if device_is_cuda(device) else '',
+        persistent_workers=True,
+    )
 
     best_dev_loss = float('inf')
 
@@ -305,14 +308,14 @@ def train(
 
             optimizer.step()
             optimizer_scheduler.step(
-                epoch_idx + (batch_idx - 1) / train_num_batches  # type: ignore
+                epoch_idx + (batch_idx - 1) / epoch_config.train_num_batches  # type: ignore
             )
             optimizer.zero_grad()
 
-            if batch_idx % 4 == 0 or batch_idx == train_num_batches:
+            if batch_idx % 4 == 0 or batch_idx == epoch_config.train_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
-                    f'B={batch_idx}/{train_num_batches}, '
+                    f'B={batch_idx}/{epoch_config.train_num_batches}, '
                     f'L={avg_loss:.5f}, '
                     f'LR={optimizer_scheduler.get_last_lr()[-1]:.6f}'
                 )
