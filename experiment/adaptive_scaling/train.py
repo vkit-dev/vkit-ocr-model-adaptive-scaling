@@ -297,7 +297,7 @@ def train(
             avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, float(loss))
             loss.backward()
 
-            if optimizer_config.clip_grad_norm_max_norm is not None
+            if optimizer_config.clip_grad_norm_max_norm is not None:
                 torch.nn.utils.clip_grad_norm_(  # type: ignore
                     model_jit.parameters(),
                     optimizer_config.clip_grad_norm_max_norm,
