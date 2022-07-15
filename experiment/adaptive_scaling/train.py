@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 @attrs.define
 class EpochConfig:
+    torch_seed: int = 133
     num_epochs: int = 98
     train_num_batches: int = 672
     train_batch_size: int = 7
@@ -48,6 +49,7 @@ class EpochConfig:
     dev_prefetch_factor: int = 4
     num_workers: int = 8
     avg_num_batches: int = 50
+    enable_overfit_testing: bool = False
 
 
 @attrs.define
@@ -65,7 +67,7 @@ class OptimizerConfig:
     cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 2
     cosine_annealing_warm_restarts_eta_min: float = 1E-5
-    clip_grad_norm_max_norm: float = 2.0
+    clip_grad_norm_max_norm: Optional[float] = None
 
 
 @attrs.define
@@ -101,7 +103,6 @@ def train(
     loss_config_json: Optional[str] = None,
     restore_state_dict_path: Optional[str] = None,
     reset_epoch_idx: bool = False,
-    torch_seed: int = 133,
 ):
     out_fd = io.folder(output_folder, reset=reset_output_folder, touch=True)
     logger.info(f'out_fd = {out_fd}')
@@ -158,7 +159,7 @@ def train(
     logger.info(f'device = {device}')
 
     # Init.
-    setup_seeds(torch_seed=torch_seed)
+    setup_seeds(torch_seed=epoch_config.torch_seed)
     enable_cudnn_benchmark(device)
     enable_cudnn_deterministic(device)
 
@@ -180,10 +181,6 @@ def train(
     shutil.copyfile(
         adaptive_scaling_dataset_steps_json, out_fd / 'adaptive_scaling_dataset_steps.json'
     )
-    train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        steps_json=adaptive_scaling_dataset_steps_json,
-        num_samples=train_num_samples,
-    )
     dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
         steps_json=adaptive_scaling_dataset_steps_json,
         num_samples=dev_num_samples,
@@ -192,6 +189,13 @@ def train(
             rng_seed=epoch_config.dev_rng_seed,
         )
     )
+    if not epoch_config.enable_overfit_testing:
+        train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+            steps_json=adaptive_scaling_dataset_steps_json,
+            num_samples=train_num_samples,
+        )
+    else:
+        train_adaptive_scaling_dataset = dev_adaptive_scaling_dataset
 
     # Model.
     model = AdaptiveScaling(
@@ -246,16 +250,6 @@ def train(
         )
 
     # Dataloader.
-    train_data_loader = DataLoader(
-        train_adaptive_scaling_dataset,
-        collate_fn=adaptive_scaling_dataset_collate_fn,
-        batch_size=epoch_config.train_batch_size,
-        num_workers=epoch_config.num_workers,
-        prefetch_factor=epoch_config.train_prefetch_factor,
-        pin_memory=device_is_cuda(device),
-        pin_memory_device=str(device) if device_is_cuda(device) else '',
-        persistent_workers=True,
-    )
     dev_data_loader = DataLoader(
         dev_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
@@ -265,6 +259,21 @@ def train(
         pin_memory=device_is_cuda(device),
         pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
+    if not epoch_config.enable_overfit_testing:
+        train_data_loader = DataLoader(
+            train_adaptive_scaling_dataset,
+            collate_fn=adaptive_scaling_dataset_collate_fn,
+            batch_size=epoch_config.train_batch_size,
+            num_workers=epoch_config.num_workers,
+            prefetch_factor=epoch_config.train_prefetch_factor,
+            pin_memory=device_is_cuda(device),
+            pin_memory_device=str(device) if device_is_cuda(device) else '',
+            persistent_workers=True,
+        )
+        train_num_batches = epoch_config.train_num_batches
+    else:
+        train_data_loader = dev_data_loader
+        train_num_batches = epoch_config.dev_num_batches
 
     best_dev_loss = float('inf')
 
@@ -288,21 +297,22 @@ def train(
             avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, float(loss))
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(  # type: ignore
-                model_jit.parameters(),
-                optimizer_config.clip_grad_norm_max_norm,
-            )
+            if optimizer_config.clip_grad_norm_max_norm is not None
+                torch.nn.utils.clip_grad_norm_(  # type: ignore
+                    model_jit.parameters(),
+                    optimizer_config.clip_grad_norm_max_norm,
+                )
 
             optimizer.step()
             optimizer_scheduler.step(
-                epoch_idx + (batch_idx - 1) / epoch_config.train_num_batches  # type: ignore
+                epoch_idx + (batch_idx - 1) / train_num_batches  # type: ignore
             )
             optimizer.zero_grad()
 
-            if batch_idx % 4 == 0 or batch_idx == epoch_config.train_num_batches:
+            if batch_idx % 4 == 0 or batch_idx == train_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
-                    f'B={batch_idx}/{epoch_config.train_num_batches}, '
+                    f'B={batch_idx}/{train_num_batches}, '
                     f'L={avg_loss:.5f}, '
                     f'LR={optimizer_scheduler.get_last_lr()[-1]:.6f}'
                 )

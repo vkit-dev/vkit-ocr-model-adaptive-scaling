@@ -79,12 +79,13 @@ def sample_adaptive_scaling_dataset(
     out_fd = io.folder(output_folder, touch=True)
 
     num_samples = batch_size * epoch_size
+    dataset = AdaptiveScalingIterableDataset(
+        steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
+        num_samples=num_samples,
+        rng_seed=13370,
+    )
     data_loader = DataLoader(
-        dataset=AdaptiveScalingIterableDataset(
-            steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
-            num_samples=num_samples,
-            rng_seed=13370,
-        ),
+        dataset,
         batch_size=batch_size,
         num_workers=num_workers,
         collate_fn=adaptive_scaling_dataset_collate_fn,
