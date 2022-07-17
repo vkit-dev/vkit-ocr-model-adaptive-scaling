@@ -184,6 +184,7 @@ def train(
         num_samples=dev_num_samples,
         rng_seed=epoch_config.dev_rng_seed,
         num_processes=epoch_config.num_processes,
+        is_dev=True,
     )
     if not epoch_config.enable_overfit_testing:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
