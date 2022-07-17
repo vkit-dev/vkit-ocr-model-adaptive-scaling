@@ -71,7 +71,7 @@ def test_adaptive_scaling_jit_loss_backward():
 
 
 def sample_adaptive_scaling_dataset(
-    num_workers: int,
+    num_processes: int,
     batch_size: int,
     epoch_size: int,
     output_folder: str,
@@ -83,15 +83,16 @@ def sample_adaptive_scaling_dataset(
         steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
         num_samples=num_samples,
         rng_seed=13370,
+        num_processes=num_processes,
     )
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,
-        num_workers=num_workers,
         collate_fn=adaptive_scaling_dataset_collate_fn,
     )
 
     for batch_idx, batch in enumerate(data_loader):
+        print(f'Saving batch_idx={batch_idx} ...')
         batch_image = batch['image']
         batch_downsampled_mask = batch['downsampled_mask']
         batch_downsampled_score_map = batch['downsampled_score_map']
@@ -138,23 +139,26 @@ def sample_adaptive_scaling_dataset(
             painter.paint_score_map(downsampled_score_map)
             painter.to_file(out_fd / f'{output_prefix}_downsampled_score_map.jpg')
 
+            painter = Painter.create(downsampled_image)
+            painter.paint_score_map(downsampled_score_map, alpha=1.0)
+            painter.to_file(out_fd / f'{output_prefix}_downsampled_score_map_alpha_1.jpg')
 
-def profile_adaptive_scaling_dataset(num_workers: int, batch_size: int, epoch_size: int):
+
+def profile_adaptive_scaling_dataset(num_processes: int, batch_size: int, epoch_size: int):
     from datetime import datetime
     from tqdm import tqdm
     import numpy as np
 
     num_samples = batch_size * epoch_size
-    rng_seed = list(range(num_samples))
 
     data_loader = DataLoader(
         dataset=AdaptiveScalingIterableDataset(
             steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
             num_samples=num_samples,
-            rng_seed=rng_seed,
+            rng_seed=13370,
+            num_processes=num_processes,
         ),
         batch_size=batch_size,
-        num_workers=num_workers,
         collate_fn=adaptive_scaling_dataset_collate_fn,
     )
 
