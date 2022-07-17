@@ -42,11 +42,9 @@ class EpochConfig:
     train_num_batches: int = 672
     train_batch_size: int = 7
     train_rng_seed: int = 13371
-    train_prefetch_factor: int = 4
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
-    dev_prefetch_factor: int = 4
     num_processes: int = 4
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
@@ -260,7 +258,6 @@ def train(
         dev_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
         batch_size=epoch_config.dev_batch_size,
-        prefetch_factor=epoch_config.dev_prefetch_factor,
         pin_memory=device_is_cuda(device),
         pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
@@ -268,10 +265,8 @@ def train(
         train_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
         batch_size=epoch_config.train_batch_size,
-        prefetch_factor=epoch_config.train_prefetch_factor,
         pin_memory=device_is_cuda(device),
         pin_memory_device=str(device) if device_is_cuda(device) else '',
-        persistent_workers=True,
     )
 
     best_dev_loss = float('inf')
