@@ -59,10 +59,10 @@ def infer(
     )
 
     out_fd = io.folder(output_folder, touch=True)
-    painter = Painter(image)
+    painter = Painter(image.copy())
     painter.paint_mask(mask)
     painter.to_file(out_fd / 'mask.png')
 
-    painter = Painter(image)
-    painter.paint_score_map(score_map)
+    painter = Painter(image.copy())
+    painter.paint_score_map(score_map, alpha=1.0)
     painter.to_file(out_fd / 'score_map.png')
