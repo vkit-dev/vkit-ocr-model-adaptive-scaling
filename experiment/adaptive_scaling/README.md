@@ -179,6 +179,15 @@ fib experiment/adaptive_scaling/train.py:train \
     --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210718"
 ```
 
+```bash
+echo '{"neck_head_type": "upernext"}' > "${VKIT_ARTIFACT_PACK}/pipeline/text_detection/upernext_model_config.json"
+
+fib experiment/adaptive_scaling/train.py:train \
+    --adaptive_scaling_dataset_steps_json="${VKIT_ARTIFACT_PACK}/pipeline/text_detection/adaptive_scaling.json" \
+    --model_config_json="${VKIT_ARTIFACT_PACK}/pipeline/text_detection/upernext_model_config.json" \
+    --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210719"
+```
+
 ## demo
 
 ```bash
