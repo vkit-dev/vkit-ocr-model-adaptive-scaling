@@ -194,7 +194,7 @@ def train(
     logger.info(f'train_num_samples = {train_num_samples}, dev_num_samples={dev_num_samples}')
 
     shutil.copyfile(
-        dataset_config.dev_adaptive_scaling_dataset_steps_json,
+        io.file(dataset_config.dev_adaptive_scaling_dataset_steps_json, expandvars=True),
         out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
     dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
@@ -299,11 +299,11 @@ def train(
 
     while epoch_idx < epoch_config.num_epochs:
         if epoch_idx > 0 and epoch_idx in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
-            adaptive_scaling_dataset_steps_json = \
+            train_adaptive_scaling_dataset_steps_json = \
                 epoch_idx_to_train_adaptive_scaling_dataset_steps_json[epoch_idx]
-            logger.info(f'Reset to use {adaptive_scaling_dataset_steps_json} for training.')
+            logger.info(f'Reset to use {train_adaptive_scaling_dataset_steps_json} for training.')
             shutil.copyfile(
-                adaptive_scaling_dataset_steps_json,
+                io.file(train_adaptive_scaling_dataset_steps_json, expandvars=True),
                 out_fd / f'train_epoch_{epoch_idx}_adaptive_scaling_dataset_steps.json',
             )
 
@@ -311,7 +311,7 @@ def train(
             del train_adaptive_scaling_dataset
             del train_data_loader
             train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-                steps_json=adaptive_scaling_dataset_steps_json,
+                steps_json=train_adaptive_scaling_dataset_steps_json,
                 num_samples=train_num_samples,
                 rng_seed=epoch_config.train_rng_seed,
                 num_processes=epoch_config.num_processes,
