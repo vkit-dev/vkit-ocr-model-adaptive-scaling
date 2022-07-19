@@ -45,7 +45,7 @@ class EpochConfig:
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
-    num_processes: int = 4
+    num_processes: int = 8
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
 
