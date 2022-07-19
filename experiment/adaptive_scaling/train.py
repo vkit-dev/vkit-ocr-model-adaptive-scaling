@@ -1,4 +1,4 @@
-from typing import Tuple, Mapping, Optional, List
+from typing import Tuple, Mapping, Optional, List, Sequence
 import itertools
 from enum import Enum, unique
 import logging
@@ -90,8 +90,15 @@ class RestoreState:
     optimizer_scheduler_state_dict: Mapping[str, torch.Tensor]
 
 
+@attrs.define
+class DatasetConfig:
+    train_adaptive_scaling_dataset_steps_jsons: Sequence[str]
+    epoch_indices: Sequence[int]
+    dev_adaptive_scaling_dataset_steps_json: str
+
+
 def train(
-    adaptive_scaling_dataset_steps_json: str,
+    dataset_config_json: str,
     output_folder: str,
     reset_output_folder: bool = False,
     device_value: str = 'cuda',
@@ -113,6 +120,16 @@ def train(
         logger_handler.setFormatter(logger_formatter)
 
     # Config.
+    dataset_config = dyn_structure(
+        dataset_config_json,
+        DatasetConfig,
+        support_path_type=True,
+        support_none_type=True,
+    )
+    logger.info('dataset_config:')
+    logger.info(cattrs.unstructure(dataset_config))
+    io.write_json(out_fd / 'dataset_config.json', cattrs.unstructure(dataset_config), indent=2)
+
     epoch_config = dyn_structure(
         epoch_config_json,
         EpochConfig,
@@ -177,25 +194,33 @@ def train(
     logger.info(f'train_num_samples = {train_num_samples}, dev_num_samples={dev_num_samples}')
 
     shutil.copyfile(
-        adaptive_scaling_dataset_steps_json, out_fd / 'adaptive_scaling_dataset_steps.json'
+        dataset_config.dev_adaptive_scaling_dataset_steps_json,
+        out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
     dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        steps_json=adaptive_scaling_dataset_steps_json,
+        steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
         num_samples=dev_num_samples,
         rng_seed=epoch_config.dev_rng_seed,
         num_processes=epoch_config.num_processes,
         is_dev=True,
     )
+
+    epoch_idx_to_train_adaptive_scaling_dataset_steps_json = dict(
+        zip(
+            dataset_config.epoch_indices,
+            dataset_config.train_adaptive_scaling_dataset_steps_jsons,
+        )
+    )
     if not epoch_config.enable_overfit_testing:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-            steps_json=adaptive_scaling_dataset_steps_json,
+            steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
             num_samples=train_num_samples,
             rng_seed=epoch_config.train_rng_seed,
             num_processes=epoch_config.num_processes,
         )
     else:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-            steps_json=adaptive_scaling_dataset_steps_json,
+            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
             num_samples=train_num_samples,
             num_samples_reset_rng=dev_num_samples,
             rng_seed=epoch_config.dev_rng_seed,
@@ -273,6 +298,32 @@ def train(
     best_dev_loss = float('inf')
 
     while epoch_idx < epoch_config.num_epochs:
+        if epoch_idx > 0 and epoch_idx in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
+            adaptive_scaling_dataset_steps_json = \
+                epoch_idx_to_train_adaptive_scaling_dataset_steps_json[epoch_idx]
+            logger.info(f'Reset to use {adaptive_scaling_dataset_steps_json} for training.')
+            shutil.copyfile(
+                adaptive_scaling_dataset_steps_json,
+                out_fd / f'train_epoch_{epoch_idx}_adaptive_scaling_dataset_steps.json',
+            )
+
+            train_adaptive_scaling_dataset.pipeline_pool.cleanup()
+            del train_adaptive_scaling_dataset
+            del train_data_loader
+            train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+                steps_json=adaptive_scaling_dataset_steps_json,
+                num_samples=train_num_samples,
+                rng_seed=epoch_config.train_rng_seed,
+                num_processes=epoch_config.num_processes,
+            )
+            train_data_loader = DataLoader(
+                train_adaptive_scaling_dataset,
+                collate_fn=adaptive_scaling_dataset_collate_fn,
+                batch_size=epoch_config.train_batch_size,
+                pin_memory=device_is_cuda(device),
+                pin_memory_device=str(device) if device_is_cuda(device) else '',
+            )
+
         logger.info('Training...')
         model_jit.train()
         torch.set_grad_enabled(True)
