@@ -42,10 +42,11 @@ class EpochConfig:
     train_num_batches: int = 672
     train_batch_size: int = 7
     train_rng_seed: int = 13371
+    train_num_processes: int = 8
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
-    num_processes: int = 8
+    dev_num_processes: int = 16
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
 
@@ -181,16 +182,16 @@ def train(
     # Dataset.
     logger.info('dataset')
     train_num_samples = calculate_iterable_dataset_num_samples(
-        num_processes=epoch_config.num_processes,
+        num_processes=epoch_config.train_num_processes,
         batch_size=epoch_config.train_batch_size,
         num_batches=epoch_config.train_num_batches,
     )
     dev_num_samples = calculate_iterable_dataset_num_samples(
-        num_processes=epoch_config.num_processes,
+        num_processes=epoch_config.train_num_processes,
         batch_size=epoch_config.dev_batch_size,
         num_batches=epoch_config.dev_num_batches,
     )
-    logger.info(f'num_processes={epoch_config.num_processes}')
+    logger.info(f'num_processes={epoch_config.train_num_processes}')
     logger.info(f'train_num_samples = {train_num_samples}, dev_num_samples={dev_num_samples}')
 
     shutil.copyfile(
@@ -201,7 +202,7 @@ def train(
         steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
         num_samples=dev_num_samples,
         rng_seed=epoch_config.dev_rng_seed,
-        num_processes=epoch_config.num_processes,
+        num_processes=epoch_config.dev_num_processes,
         is_dev=True,
     )
 
@@ -216,7 +217,7 @@ def train(
             steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
             num_samples=train_num_samples,
             rng_seed=epoch_config.train_rng_seed,
-            num_processes=epoch_config.num_processes,
+            num_processes=epoch_config.train_num_processes,
         )
     else:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
@@ -224,7 +225,7 @@ def train(
             num_samples=train_num_samples,
             num_samples_reset_rng=dev_num_samples,
             rng_seed=epoch_config.dev_rng_seed,
-            num_processes=epoch_config.num_processes,
+            num_processes=epoch_config.train_num_processes,
         )
 
     # Model.
@@ -314,7 +315,7 @@ def train(
                 steps_json=train_adaptive_scaling_dataset_steps_json,
                 num_samples=train_num_samples,
                 rng_seed=epoch_config.train_rng_seed,
-                num_processes=epoch_config.num_processes,
+                num_processes=epoch_config.train_num_processes,
             )
             train_data_loader = DataLoader(
                 train_adaptive_scaling_dataset,
