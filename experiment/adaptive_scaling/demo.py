@@ -66,3 +66,26 @@ def infer(
     painter = Painter(image.copy())
     painter.paint_score_map(score_map, alpha=1.0)
     painter.to_file(out_fd / 'score_map.png')
+
+
+def convert_model_jit_to_model_onnx(
+    model_jit_path: str,
+    model_onnx_path: str,
+):
+    model_jit: torch.jit.ScriptModule = torch.jit.load(model_jit_path)  # type: ignore
+    model_jit = model_jit.eval()
+    torch.set_grad_enabled(False)
+
+    torch.onnx.export(
+        model_jit,
+        torch.randn(1, 3, 640, 640),
+        model_onnx_path,
+        input_names=['x'],
+        dynamic_axes={
+            'x': {
+                0: 'batch_size',
+                2: 'height',
+                3: 'width',
+            },
+        }
+    )
