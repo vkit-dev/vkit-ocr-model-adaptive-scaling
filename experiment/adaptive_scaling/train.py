@@ -94,6 +94,7 @@ class RestoreState:
 @attrs.define
 class DatasetConfig:
     train_adaptive_scaling_dataset_steps_jsons: Sequence[str]
+    train_rng_seeds: Sequence[int]
     epoch_indices: Sequence[int]
     dev_adaptive_scaling_dataset_steps_json: str
 
@@ -206,17 +207,28 @@ def train(
         is_dev=True,
     )
 
+    assert len(dataset_config.epoch_indices) \
+        == len(dataset_config.train_adaptive_scaling_dataset_steps_jsons)
     epoch_idx_to_train_adaptive_scaling_dataset_steps_json = dict(
         zip(
             dataset_config.epoch_indices,
             dataset_config.train_adaptive_scaling_dataset_steps_jsons,
         )
     )
+
+    assert len(dataset_config.epoch_indices) == len(dataset_config.train_rng_seeds)
+    epoch_idx_to_train_rng_seed = dict(
+        zip(
+            dataset_config.epoch_indices,
+            dataset_config.train_rng_seeds,
+        )
+    )
+
     if not epoch_config.enable_overfit_testing:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
             steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
             num_samples=train_num_samples,
-            rng_seed=epoch_config.train_rng_seed,
+            rng_seed=epoch_idx_to_train_rng_seed[0],
             num_processes=epoch_config.train_num_processes,
         )
     else:
@@ -302,7 +314,11 @@ def train(
         if epoch_idx > 0 and epoch_idx in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
             train_adaptive_scaling_dataset_steps_json = \
                 epoch_idx_to_train_adaptive_scaling_dataset_steps_json[epoch_idx]
-            logger.info(f'Reset to use {train_adaptive_scaling_dataset_steps_json} for training.')
+            train_rng_seed = epoch_idx_to_train_rng_seed[epoch_idx]
+            logger.info(
+                f'Reset to use {train_adaptive_scaling_dataset_steps_json} '
+                f'with train_rng_seed={train_rng_seed} for training.'
+            )
             shutil.copyfile(
                 io.file(train_adaptive_scaling_dataset_steps_json, expandvars=True),
                 out_fd / f'train_epoch_{epoch_idx}_adaptive_scaling_dataset_steps.json',
@@ -314,7 +330,7 @@ def train(
             train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
                 steps_json=train_adaptive_scaling_dataset_steps_json,
                 num_samples=train_num_samples,
-                rng_seed=epoch_config.train_rng_seed,
+                rng_seed=train_rng_seed,
                 num_processes=epoch_config.train_num_processes,
             )
             train_data_loader = DataLoader(
