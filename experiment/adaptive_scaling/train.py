@@ -368,6 +368,7 @@ def train(
         model_jit.eval()
         torch.set_grad_enabled(False)
 
+        metrics.reset([MetricsTag.DEV_LOSS])
         dev_losses: List[float] = []
         for batch_idx, batch in enumerate(dev_data_loader, start=1):
             batch = batch_to_device(batch, device)
@@ -384,7 +385,7 @@ def train(
             loss = float(loss)
             dev_losses.append(loss)
 
-            avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, loss)
+            avg_loss = metrics.update(MetricsTag.DEV_LOSS, loss)
             if batch_idx % 4 == 0 or batch_idx >= epoch_config.dev_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
