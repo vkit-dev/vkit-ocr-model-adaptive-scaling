@@ -12,6 +12,7 @@ def infer(
     image_file: str,
     output_folder: str,
     downsample_short_side_legnth: int = 640,
+    score_map_scale: float = 2.0,
 ):
     model_jit: torch.jit.ScriptModule = torch.jit.load(model_jit_path)  # type: ignore
     model_jit = model_jit.eval()
@@ -48,7 +49,7 @@ def infer(
         cv_resize_interpolation=cv.INTER_NEAREST,
     )
 
-    score_map_mat = scale_feature[0][0].numpy().astype(np.float32)
+    score_map_mat = scale_feature[0][0].numpy().astype(np.float32) * score_map_scale
     score_map = ScoreMap(mat=score_map_mat, is_prob=False)
     assert score_map.height * 2 == image.height
     assert score_map.width * 2 == image.width
@@ -63,9 +64,12 @@ def infer(
     painter.paint_mask(mask)
     painter.to_file(out_fd / 'mask.png')
 
-    painter = Painter(image.copy())
+    painter = Painter.create(image.shape)
     painter.paint_score_map(score_map, alpha=1.0)
-    painter.to_file(out_fd / 'score_map.png')
+    layer_image = painter.image.copy()
+    render_image = image.copy()
+    render_image[mask] = layer_image
+    render_image.to_file(out_fd / 'score_map.png')
 
 
 def convert_model_jit_to_model_onnx(
