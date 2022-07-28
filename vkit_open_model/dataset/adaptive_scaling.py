@@ -59,7 +59,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         num_samples: int,
         rng_seed: int,
         num_processes: int,
-        num_runs_per_process: int = 4,
+        num_runs_per_process: int = 8,
         num_samples_reset_rng: Optional[int] = None,
         is_dev: bool = False,
     ):
@@ -85,6 +85,9 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
         self.num_samples = num_samples
         self.is_dev = is_dev
+
+        if self.is_dev:
+            self.pipeline_pool.cleanup()
 
     def __iter__(self):
         if self.is_dev:
