@@ -13,6 +13,8 @@ touch "$HOME"/container/vkit-open-model/screen_daemon.log
 CUSTOMIZED_INIT_SH=$(
 cat << 'EOF'
 
+pip install -U pip
+
 cd
 
 
