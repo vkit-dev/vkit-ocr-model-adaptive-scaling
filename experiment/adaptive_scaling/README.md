@@ -203,6 +203,12 @@ fib experiment/adaptive_scaling/train.py:train \
     --restore_state_dict_path="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210720/state_dict_41.pt"
 ```
 
+```bash
+fib experiment/adaptive_scaling/train.py:train \
+    --dataset_config_json="${VKIT_ARTIFACT_PACK}/pipeline/text_detection/adaptive_scaling_dataset_config.json" \
+    --output_folder="${VKIT_OPEN_MODEL_DATA}/adaptive_scaling_default/20210728"
+```
+
 ## demo
 
 ```bash

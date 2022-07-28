@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     torch_seed: int = 133
-    num_epochs: int = 98
+    num_epochs: int = 210
     train_num_batches: int = 672
     train_batch_size: int = 7
     train_rng_seed: int = 13371
@@ -46,7 +46,7 @@ class EpochConfig:
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
-    dev_num_processes: int = 16
+    dev_num_processes: int = 32
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
 

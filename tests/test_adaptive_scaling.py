@@ -80,9 +80,11 @@ def sample_adaptive_scaling_dataset(
 
     num_samples = batch_size * epoch_size
     dataset = AdaptiveScalingIterableDataset(
-        steps_json='$VKIT_ARTIFACT_PACK/pipeline/text_detection/adaptive_scaling.json',
+        steps_json=(
+            '$VKIT_ARTIFACT_PACK/pipeline/text_detection/dev_adaptive_scaling_dataset_steps.json'
+        ),
         num_samples=num_samples,
-        rng_seed=13370,
+        rng_seed=13,
         num_processes=num_processes,
     )
     data_loader = DataLoader(
