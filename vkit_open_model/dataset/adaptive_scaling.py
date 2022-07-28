@@ -86,9 +86,6 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         self.num_samples = num_samples
         self.is_dev = is_dev
 
-        if self.is_dev:
-            self.pipeline_pool.cleanup()
-
     def __iter__(self):
         if self.is_dev:
             self.pipeline_pool.reset()
