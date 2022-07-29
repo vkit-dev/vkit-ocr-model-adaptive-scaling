@@ -289,10 +289,20 @@ def train(
         if restore_epoch_idx:
             epoch_idx = restore_state.epoch_idx + 1
         model_jit.load_state_dict(restore_state.model_jit_state_dict)
+
+        # Patch lr if needed.
+        # NOTE: might be more needed to be patched.
+        for param_group in restore_state.optimizer_state_dict['param_groups']:
+            if param_group['initial_lr'] != optimizer_config.adamw_lr:  # type: ignore
+                logger.info('Patching initial_lr')
+                param_group['initial_lr'] = optimizer_config.adamw_lr  # type: ignore
         optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
-        optimizer_scheduler.load_state_dict(
-            restore_state.optimizer_scheduler_state_dict  # type: ignore
-        )
+
+        optimizer_scheduler_state_dict = dict(restore_state.optimizer_scheduler_state_dict)
+        if optimizer_scheduler_state_dict['base_lrs'] != [optimizer_config.adamw_lr]:
+            logger.info('Patching base_lrs')
+            optimizer_scheduler_state_dict['base_lrs'] = [optimizer_config.adamw_lr]  # type: ignore
+        optimizer_scheduler.load_state_dict(optimizer_scheduler_state_dict)  # type: ignore
 
     if reset_epoch_idx_to_value:
         epoch_idx = reset_epoch_idx_to_value
