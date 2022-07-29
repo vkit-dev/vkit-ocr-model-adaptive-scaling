@@ -302,6 +302,8 @@ def train(
         if optimizer_scheduler_state_dict['base_lrs'] != [optimizer_config.adamw_lr]:
             logger.info('Patching base_lrs')
             optimizer_scheduler_state_dict['base_lrs'] = [optimizer_config.adamw_lr]  # type: ignore
+        if reset_epoch_idx_to_value:
+            optimizer_scheduler_state_dict['last_epoch'] = reset_epoch_idx_to_value - 1  # type: ignore
         optimizer_scheduler.load_state_dict(optimizer_scheduler_state_dict)  # type: ignore
 
     if reset_epoch_idx_to_value:
