@@ -60,12 +60,12 @@ class ModelConfig:
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 8E-4
+    adamw_lr: float = 7.5E-4
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
     cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 8E-6
+    cosine_annealing_warm_restarts_eta_min: float = 7.5E-6
     clip_grad_norm_max_norm: Optional[float] = None
 
 
