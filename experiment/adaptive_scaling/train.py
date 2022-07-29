@@ -302,8 +302,12 @@ def train(
         if optimizer_scheduler_state_dict['base_lrs'] != [optimizer_config.adamw_lr]:
             logger.info('Patching base_lrs')
             optimizer_scheduler_state_dict['base_lrs'] = [optimizer_config.adamw_lr]  # type: ignore
+        eta_min = optimizer_config.cosine_annealing_warm_restarts_eta_min
+        if optimizer_scheduler_state_dict['eta_min'] != eta_min:
+            logger.info('Patching eta_min')
+            optimizer_scheduler_state_dict['eta_min'] = eta_min  # type: ignore
         if reset_epoch_idx_to_value:
-            optimizer_scheduler_state_dict['last_epoch'] = reset_epoch_idx_to_value - 1  # type: ignore
+            optimizer_scheduler_state_dict['last_epoch'] = reset_epoch_idx_to_value - 1  # type: ignore  # noqa
         optimizer_scheduler.load_state_dict(optimizer_scheduler_state_dict)  # type: ignore
 
     if reset_epoch_idx_to_value:
