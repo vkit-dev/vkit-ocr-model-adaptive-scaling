@@ -205,6 +205,7 @@ def train(
         rng_seed=epoch_config.dev_rng_seed,
         num_processes=epoch_config.dev_num_processes,
         is_dev=True,
+        keep_dev_samples=True,
     )
 
     assert len(dataset_config.epoch_indices) \
@@ -411,10 +412,15 @@ def train(
 
         dev_loss = statistics.mean(dev_losses)
         logger.info(f'E={epoch_idx}, dev_loss = {dev_loss}')
-        if dev_loss < best_dev_loss:
-            best_dev_loss = dev_loss
-            state_dict_path = out_fd / f'state_dict_{epoch_idx}.pt'
-            logger.info(f'E={epoch_idx}, FOR NOW THE BEST, SAVING TO {state_dict_path}')
+        if dev_loss < best_dev_loss \
+                or epoch_idx + 1 in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
+
+            if dev_loss < best_dev_loss:
+                best_dev_loss = dev_loss
+                state_dict_path = out_fd / f'state_dict_{epoch_idx}.pt'
+                logger.info(f'E={epoch_idx}, FOR NOW THE BEST, SAVING TO {state_dict_path}')
+            else:
+                state_dict_path = out_fd / f'state_dict_{epoch_idx}_not_best.pt'
 
             restore_state = RestoreState(
                 epoch_idx=epoch_idx,

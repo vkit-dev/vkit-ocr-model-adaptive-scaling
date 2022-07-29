@@ -62,6 +62,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         num_runs_per_process: int = 8,
         num_samples_reset_rng: Optional[int] = None,
         is_dev: bool = False,
+        keep_dev_samples: bool = False,
     ):
         super().__init__()
 
@@ -85,8 +86,21 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
         self.num_samples = num_samples
         self.is_dev = is_dev
+        self.keep_dev_samples = keep_dev_samples
+
+        self.dev_samples: List[Sample] = []
+        if self.is_dev and self.keep_dev_samples:
+            while len(self.dev_samples) < self.num_samples:
+                self.dev_samples.extend(self.pipeline_pool.run())
+            self.dev_samples = self.dev_samples[:self.num_samples]
+            self.pipeline_pool.cleanup()
 
     def __iter__(self):
+        if self.is_dev and self.keep_dev_samples:
+            assert len(self.dev_samples) == self.num_samples
+            yield from self.dev_samples
+            return
+
         if self.is_dev:
             self.pipeline_pool.reset()
 
