@@ -109,7 +109,8 @@ def train(
     optimizer_config_json: Optional[str] = None,
     loss_config_json: Optional[str] = None,
     restore_state_dict_path: Optional[str] = None,
-    reset_epoch_idx: bool = False,
+    restore_epoch_idx: bool = True,
+    reset_epoch_idx_to_value: Optional[int] = None,
 ):
     out_fd = io.folder(output_folder, reset=reset_output_folder, touch=True)
     logger.info(f'out_fd = {out_fd}')
@@ -285,13 +286,16 @@ def train(
             torch.load(restore_state_dict_path, map_location='cpu'),
             RestoreState,
         )
-        if not reset_epoch_idx:
+        if restore_epoch_idx:
             epoch_idx = restore_state.epoch_idx + 1
         model_jit.load_state_dict(restore_state.model_jit_state_dict)
         optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
         optimizer_scheduler.load_state_dict(
             restore_state.optimizer_scheduler_state_dict  # type: ignore
         )
+
+    if reset_epoch_idx_to_value:
+        epoch_idx = reset_epoch_idx_to_value
 
     # Dataloader.
     dev_data_loader = DataLoader(
