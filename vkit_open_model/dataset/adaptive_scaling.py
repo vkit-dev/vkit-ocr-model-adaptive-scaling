@@ -81,6 +81,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
             num_processes=num_processes,
             num_runs_per_process=num_runs_per_process,
             num_runs_reset_rng=num_runs_reset_rng,
+            get_timeout=120,
         )
         logger.info('Pipeline pool created.')
 
