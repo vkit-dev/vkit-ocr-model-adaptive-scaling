@@ -189,7 +189,7 @@ def train(
         num_batches=epoch_config.train_num_batches,
     )
     dev_num_samples = calculate_iterable_dataset_num_samples(
-        num_processes=epoch_config.train_num_processes,
+        num_processes=epoch_config.dev_num_processes,
         batch_size=epoch_config.dev_batch_size,
         num_batches=epoch_config.dev_num_batches,
     )
