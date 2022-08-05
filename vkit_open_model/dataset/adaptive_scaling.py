@@ -75,7 +75,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
                 steps=pipeline_step_collection_factory.create(steps_json),
                 post_processor=adaptive_scaling_pipeline_post_processor_factory.create(),
             ),
-            inventory=num_processes * 8,
+            inventory=num_processes * 7,
             rng_seed=rng_seed,
             num_processes=num_processes,
             num_runs_reset_rng=num_runs_reset_rng,

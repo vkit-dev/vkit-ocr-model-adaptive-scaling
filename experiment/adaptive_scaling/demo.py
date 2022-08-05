@@ -49,7 +49,7 @@ def infer(
         cv_resize_interpolation=cv.INTER_NEAREST,
     )
 
-    score_map_mat = scale_feature[0][0].numpy().astype(np.float32) * score_map_scale
+    score_map_mat = torch.exp(scale_feature[0][0]).numpy().astype(np.float32) * score_map_scale
     score_map = ScoreMap(mat=score_map_mat, is_prob=False)
     assert score_map.height * 2 == image.height
     assert score_map.width * 2 == image.width
