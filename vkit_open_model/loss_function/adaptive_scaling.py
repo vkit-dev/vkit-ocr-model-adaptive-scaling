@@ -63,7 +63,6 @@ class AdaptiveScalingLossFunction:
         )
 
         # Scale.
-        # Clamp min to 1.1 to avoid torch.log nan.
         scale_min = 1.0
         l1_mask = ((downsampled_score_map > scale_min) & downsampled_mask.bool()).float()
         downsampled_score_map = torch.clamp(downsampled_score_map, min=scale_min)
