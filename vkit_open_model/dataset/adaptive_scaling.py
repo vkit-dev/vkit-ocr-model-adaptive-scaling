@@ -59,10 +59,8 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         num_samples: int,
         rng_seed: int,
         num_processes: int,
-        num_runs_per_process: int = 16,
         num_samples_reset_rng: Optional[int] = None,
         is_dev: bool = False,
-        keep_dev_samples: bool = False,
     ):
         super().__init__()
 
@@ -77,33 +75,28 @@ class AdaptiveScalingIterableDataset(IterableDataset):
                 steps=pipeline_step_collection_factory.create(steps_json),
                 post_processor=adaptive_scaling_pipeline_post_processor_factory.create(),
             ),
+            inventory=num_processes * 4,
             rng_seed=rng_seed,
             num_processes=num_processes,
-            num_runs_per_process=num_runs_per_process,
             num_runs_reset_rng=num_runs_reset_rng,
-            get_timeout=120,
         )
         logger.info('Pipeline pool created.')
 
         self.num_samples = num_samples
         self.is_dev = is_dev
-        self.keep_dev_samples = keep_dev_samples
 
         self.dev_samples: List[Sample] = []
-        if self.is_dev and self.keep_dev_samples:
+        if self.is_dev:
             while len(self.dev_samples) < self.num_samples:
                 self.dev_samples.extend(self.pipeline_pool.run())
             self.dev_samples = self.dev_samples[:self.num_samples]
             self.pipeline_pool.cleanup()
 
     def __iter__(self):
-        if self.is_dev and self.keep_dev_samples:
+        if self.is_dev:
             assert len(self.dev_samples) == self.num_samples
             yield from self.dev_samples
             return
-
-        if self.is_dev:
-            self.pipeline_pool.reset()
 
         cached_samples: List[Sample] = []
 
@@ -111,9 +104,6 @@ class AdaptiveScalingIterableDataset(IterableDataset):
             if not cached_samples:
                 cached_samples.extend(self.pipeline_pool.run())
             yield cached_samples.pop()
-
-        if self.is_dev:
-            self.pipeline_pool.cleanup()
 
 
 def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):

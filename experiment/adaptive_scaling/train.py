@@ -206,7 +206,6 @@ def train(
         rng_seed=epoch_config.dev_rng_seed,
         num_processes=epoch_config.dev_num_processes,
         is_dev=True,
-        keep_dev_samples=True,
     )
 
     assert len(dataset_config.epoch_indices) \
@@ -307,7 +306,8 @@ def train(
             logger.info('Patching eta_min')
             optimizer_scheduler_state_dict['eta_min'] = eta_min  # type: ignore
         if reset_epoch_idx_to_value:
-            optimizer_scheduler_state_dict['last_epoch'] = reset_epoch_idx_to_value - 1  # type: ignore  # noqa
+            optimizer_scheduler_state_dict['last_epoch'
+                                           ] = reset_epoch_idx_to_value - 1  # type: ignore  # noqa
         optimizer_scheduler.load_state_dict(optimizer_scheduler_state_dict)  # type: ignore
 
     if reset_epoch_idx_to_value:
