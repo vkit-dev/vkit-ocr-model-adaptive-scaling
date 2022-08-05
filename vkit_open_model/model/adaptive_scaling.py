@@ -29,7 +29,7 @@ class AdaptiveScaling(nn.Module):
         self,
         size: AdaptiveScalingSize,
         neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN,
-        init_scale_output_bias: float = 2.15,
+        init_scale_output_bias: float = 8.0,
     ):
         super().__init__()
 
