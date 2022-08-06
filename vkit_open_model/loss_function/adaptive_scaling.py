@@ -16,6 +16,7 @@ class AdaptiveScalingLossFunction:
         bce_factor: float = 2.0,
         dice_factor: float = 1.0,
         l1_factor: float = 1.0,
+        scale_feature_min: float = 1.5,
     ):
         # Mask.
         self.bce_factor = bce_factor
@@ -29,6 +30,7 @@ class AdaptiveScalingLossFunction:
         # Scale.
         self.l1_factor = l1_factor
         self.l1 = L1LossFunction(smooth=True)
+        self.scale_feature_min = scale_feature_min
 
     def __call__(
         self,
@@ -63,12 +65,12 @@ class AdaptiveScalingLossFunction:
         )
 
         # Scale.
-        # Clamp min to 1.1 to avoid torch.log nan.
-        scale_min = 1.1
-        l1_mask = ((scale_feature > scale_min) & (downsampled_score_map > scale_min)
+        # NOTE: critical mask!
+        l1_mask = ((scale_feature > self.scale_feature_min)
+                   & (downsampled_score_map > self.scale_feature_min)
                    & downsampled_mask.bool()).float()
-        scale_feature = torch.clamp(scale_feature, min=scale_min)
-        downsampled_score_map = torch.clamp(downsampled_score_map, min=scale_min)
+        scale_feature = torch.clamp(scale_feature, min=self.scale_feature_min)
+        downsampled_score_map = torch.clamp(downsampled_score_map, min=self.scale_feature_min)
         # Log space + smooth L1 to model the relative scale difference.
         loss += self.l1_factor * self.l1(
             pred=torch.log(scale_feature),
