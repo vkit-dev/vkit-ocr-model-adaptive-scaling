@@ -24,7 +24,7 @@ from vkit_open_model.dataset import (
 from vkit_open_model.loss_function import AdaptiveScalingLossFunction
 from vkit_open_model.training import (
     batch_to_device,
-    device_is_cuda,
+    # device_is_cuda,
     enable_cudnn_benchmark,
     enable_cudnn_deterministic,
     setup_seeds,
@@ -231,6 +231,7 @@ def train(
             num_samples=train_num_samples,
             rng_seed=epoch_idx_to_train_rng_seed[0],
             num_processes=epoch_config.train_num_processes,
+            num_cached_runs=epoch_config.train_num_processes * 3,
         )
     else:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
@@ -239,6 +240,7 @@ def train(
             num_samples_reset_rng=dev_num_samples,
             rng_seed=epoch_config.dev_rng_seed,
             num_processes=epoch_config.train_num_processes,
+            num_cached_runs=epoch_config.train_num_processes * 3,
         )
 
     # Model.
@@ -314,19 +316,20 @@ def train(
         epoch_idx = reset_epoch_idx_to_value
 
     # Dataloader.
+    # Disable pin memory due to possible memory leak (I'm not sure).
     dev_data_loader = DataLoader(
         dev_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
         batch_size=epoch_config.dev_batch_size,
-        pin_memory=device_is_cuda(device),
-        pin_memory_device=str(device) if device_is_cuda(device) else '',
+        # pin_memory=device_is_cuda(device),
+        # pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
     train_data_loader = DataLoader(
         train_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
         batch_size=epoch_config.train_batch_size,
-        pin_memory=device_is_cuda(device),
-        pin_memory_device=str(device) if device_is_cuda(device) else '',
+        # pin_memory=device_is_cuda(device),
+        # pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
 
     best_dev_loss = float('inf')
@@ -353,13 +356,14 @@ def train(
                 num_samples=train_num_samples,
                 rng_seed=train_rng_seed,
                 num_processes=epoch_config.train_num_processes,
+                num_cached_runs=epoch_config.train_num_processes * 3,
             )
             train_data_loader = DataLoader(
                 train_adaptive_scaling_dataset,
                 collate_fn=adaptive_scaling_dataset_collate_fn,
                 batch_size=epoch_config.train_batch_size,
-                pin_memory=device_is_cuda(device),
-                pin_memory_device=str(device) if device_is_cuda(device) else '',
+                # pin_memory=device_is_cuda(device),
+                # pin_memory_device=str(device) if device_is_cuda(device) else '',
             )
 
         logger.info('Training...')

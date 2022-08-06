@@ -2,7 +2,7 @@ from typing import Tuple, Optional, Iterable, Dict, List, Any, Sequence
 import logging
 
 import numpy as np
-from numpy.random import Generator as RandomGenerator
+from numpy.random import Generator as RandomGenerator, default_rng
 from torch.utils.data import IterableDataset, default_collate
 
 from vkit.element import Image, Mask, ScoreMap, Box
@@ -60,6 +60,7 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         rng_seed: int,
         num_processes: int,
         num_samples_reset_rng: Optional[int] = None,
+        num_cached_runs: Optional[int] = None,
         is_dev: bool = False,
     ):
         super().__init__()
@@ -82,6 +83,9 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         )
         logger.info('Pipeline pool created.')
 
+        self.rng = default_rng(rng_seed)
+        self.num_cached_runs = num_cached_runs
+
         self.num_samples = num_samples
         self.is_dev = is_dev
 
@@ -102,7 +106,19 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
         for _ in range(self.num_samples):
             if not cached_samples:
-                cached_samples.extend(self.pipeline_pool.run())
+
+                if not self.num_cached_runs:
+                    cached_samples.extend(self.pipeline_pool.run())
+
+                else:
+                    cur_cached_samples: List[Sample] = []
+                    for _ in range(self.num_cached_runs):
+                        cur_cached_samples.extend(self.pipeline_pool.run())
+                    shuffled_indices = list(range(len(cur_cached_samples)))
+                    self.rng.shuffle(shuffled_indices)
+                    for idx in shuffled_indices:
+                        cached_samples.append(cur_cached_samples[idx])
+
             yield cached_samples.pop()
 
 
