@@ -16,7 +16,7 @@ class AdaptiveScalingLossFunction:
         bce_factor: float = 2.0,
         dice_factor: float = 1.0,
         l1_factor: float = 1.0,
-        scale_feature_min: float = 1.5,
+        scale_feature_min: float = 1.1,
     ):
         # Mask.
         self.bce_factor = bce_factor
