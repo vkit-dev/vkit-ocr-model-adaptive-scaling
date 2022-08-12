@@ -73,7 +73,6 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         logger.info('Creating pipeline pool...')
         num_runs_reset_rng = None
         if config.num_samples_reset_rng:
-            assert config.num_samples_reset_rng % config.num_processes == 0
             num_runs_reset_rng = config.num_samples_reset_rng // config.num_processes
 
         self.pipeline_pool = PipelinePool(

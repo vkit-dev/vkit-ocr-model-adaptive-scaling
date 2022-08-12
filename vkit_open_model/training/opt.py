@@ -39,11 +39,8 @@ def setup_seeds(
 
 
 def calculate_iterable_dataset_num_samples(
-    num_processes: int,
     batch_size: int,
     num_batches: int,
 ):
     num_samples = batch_size * num_batches
-    if num_processes > 0:
-        assert num_samples % num_processes == 0
     return num_samples

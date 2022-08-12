@@ -45,7 +45,7 @@ class EpochConfig:
     train_num_batches: int = 672
     train_batch_size: int = 7
     train_rng_seed: int = 13371
-    train_num_processes: int = 6
+    train_num_processes: int = 8
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
@@ -172,12 +172,10 @@ def train(
     # Dataset.
     logger.info('dataset')
     train_num_samples = calculate_iterable_dataset_num_samples(
-        num_processes=epoch_config.train_num_processes,
         batch_size=epoch_config.train_batch_size,
         num_batches=epoch_config.train_num_batches,
     )
     dev_num_samples = calculate_iterable_dataset_num_samples(
-        num_processes=epoch_config.dev_num_processes,
         batch_size=epoch_config.dev_batch_size,
         num_batches=epoch_config.dev_num_batches,
     )
