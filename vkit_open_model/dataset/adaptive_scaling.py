@@ -105,8 +105,8 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         cached_samples: List[Sample] = []
 
         for _ in range(self.num_samples):
-            if not cached_samples:
 
+            while not cached_samples:
                 if not self.num_cached_runs:
                     cached_samples.extend(self.pipeline_pool.run())
 
@@ -118,6 +118,9 @@ class AdaptiveScalingIterableDataset(IterableDataset):
                     self.rng.shuffle(shuffled_indices)
                     for idx in shuffled_indices:
                         cached_samples.append(cur_cached_samples[idx])
+
+                if not cached_samples:
+                    logger.warning(f'cached_samples not filled!')
 
             yield cached_samples.pop()
 
