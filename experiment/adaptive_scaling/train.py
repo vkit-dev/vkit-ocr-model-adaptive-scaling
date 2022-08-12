@@ -13,15 +13,18 @@ from torch.utils.data import DataLoader
 
 from vkit.utility import dyn_structure, PathType
 from vkit_open_model.model import (
+    AdaptiveScalingConfig,
     AdaptiveScaling,
-    AdaptiveScalingSize,
-    AdaptiveScalingNeckHeadType,
 )
 from vkit_open_model.dataset import (
     adaptive_scaling_dataset_collate_fn,
+    AdaptiveScalingIterableDatasetConfig,
     AdaptiveScalingIterableDataset,
 )
-from vkit_open_model.loss_function import AdaptiveScalingLossFunction
+from vkit_open_model.loss_function import (
+    AdaptiveScalingLossFunctionConifg,
+    AdaptiveScalingLossFunction,
+)
 from vkit_open_model.training import (
     batch_to_device,
     # device_is_cuda,
@@ -52,13 +55,6 @@ class EpochConfig:
 
 
 @attrs.define
-class ModelConfig:
-    size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
-    neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
-    init_scale_output_bias: float = 8.0
-
-
-@attrs.define
 class OptimizerConfig:
     adamw_lr: float = 8E-4
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
@@ -67,14 +63,6 @@ class OptimizerConfig:
     cosine_annealing_warm_restarts_tmulti: int = 2
     cosine_annealing_warm_restarts_eta_min: float = 8E-6
     clip_grad_norm_max_norm: Optional[float] = None
-
-
-@attrs.define
-class LossConfig:
-    negative_ratio: float = 3.0
-    bce_factor: float = 2.0
-    dice_factor: float = 1.0
-    l1_factor: float = 1.0
 
 
 @unique
@@ -145,7 +133,7 @@ def train(
 
     model_config = dyn_structure(
         model_config_json,
-        ModelConfig,
+        AdaptiveScalingConfig,
         support_path_type=True,
         support_none_type=True,
     )
@@ -165,7 +153,7 @@ def train(
 
     loss_config = dyn_structure(
         loss_config_json,
-        LossConfig,
+        AdaptiveScalingLossFunctionConifg,
         support_path_type=True,
         support_none_type=True,
     )
@@ -201,11 +189,13 @@ def train(
         out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
     dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
-        num_samples=dev_num_samples,
-        rng_seed=epoch_config.dev_rng_seed,
-        num_processes=epoch_config.dev_num_processes,
-        is_dev=True,
+        AdaptiveScalingIterableDatasetConfig(
+            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+            num_samples=dev_num_samples,
+            rng_seed=epoch_config.dev_rng_seed,
+            num_processes=epoch_config.dev_num_processes,
+            is_dev=True,
+        )
     )
 
     assert len(dataset_config.epoch_indices) \
@@ -227,39 +217,34 @@ def train(
 
     if not epoch_config.enable_overfit_testing:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-            steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
-            num_samples=train_num_samples,
-            rng_seed=epoch_idx_to_train_rng_seed[0],
-            num_processes=epoch_config.train_num_processes,
-            num_cached_runs=epoch_config.train_num_processes * 3,
+            AdaptiveScalingIterableDatasetConfig(
+                steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
+                num_samples=train_num_samples,
+                rng_seed=epoch_idx_to_train_rng_seed[0],
+                num_processes=epoch_config.train_num_processes,
+                num_cached_runs=epoch_config.train_num_processes * 3,
+            )
         )
     else:
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
-            num_samples=train_num_samples,
-            num_samples_reset_rng=dev_num_samples,
-            rng_seed=epoch_config.dev_rng_seed,
-            num_processes=epoch_config.train_num_processes,
-            num_cached_runs=epoch_config.train_num_processes * 3,
+            AdaptiveScalingIterableDatasetConfig(
+                steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+                num_samples=train_num_samples,
+                num_samples_reset_rng=dev_num_samples,
+                rng_seed=epoch_config.dev_rng_seed,
+                num_processes=epoch_config.train_num_processes,
+                num_cached_runs=epoch_config.train_num_processes * 3,
+            )
         )
 
     # Model.
-    model = AdaptiveScaling(
-        size=model_config.size,
-        neck_head_type=model_config.neck_head_type,
-        init_scale_output_bias=model_config.init_scale_output_bias,
-    )
+    model = AdaptiveScaling(model_config)
     model_jit: torch.jit.ScriptModule = torch.jit.script(model)  # type: ignore
     model_jit = model_jit.to(device)
     del model
 
     # Loss.
-    loss_function = AdaptiveScalingLossFunction(
-        negative_ratio=loss_config.negative_ratio,
-        bce_factor=loss_config.bce_factor,
-        dice_factor=loss_config.dice_factor,
-        l1_factor=loss_config.l1_factor,
-    )
+    loss_function = AdaptiveScalingLossFunction(loss_config)
 
     # Optimizer.
     optimizer = torch.optim.AdamW(
@@ -352,11 +337,13 @@ def train(
             del train_adaptive_scaling_dataset
             del train_data_loader
             train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-                steps_json=train_adaptive_scaling_dataset_steps_json,
-                num_samples=train_num_samples,
-                rng_seed=train_rng_seed,
-                num_processes=epoch_config.train_num_processes,
-                num_cached_runs=epoch_config.train_num_processes * 3,
+                AdaptiveScalingIterableDatasetConfig(
+                    steps_json=train_adaptive_scaling_dataset_steps_json,
+                    num_samples=train_num_samples,
+                    rng_seed=train_rng_seed,
+                    num_processes=epoch_config.train_num_processes,
+                    num_cached_runs=epoch_config.train_num_processes * 3,
+                )
             )
             train_data_loader = DataLoader(
                 train_adaptive_scaling_dataset,
@@ -463,18 +450,14 @@ def build_model_jit_from_state_dict_path(
 ):
     model_config = dyn_structure(
         model_config_json,
-        ModelConfig,
+        AdaptiveScalingConfig,
         support_path_type=True,
         support_none_type=True,
     )
     logger.info('model_config:')
     logger.info(cattrs.unstructure(model_config))
 
-    model = AdaptiveScaling(
-        size=model_config.size,
-        neck_head_type=model_config.neck_head_type,
-        init_scale_output_bias=model_config.init_scale_output_bias,
-    )
+    model = AdaptiveScaling(model_config)
     model_jit: torch.jit.ScriptModule = torch.jit.script(model)  # type: ignore
     del model
 

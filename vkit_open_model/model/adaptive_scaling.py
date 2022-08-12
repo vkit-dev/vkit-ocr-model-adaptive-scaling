@@ -3,6 +3,7 @@ from enum import Enum, unique
 
 import torch
 from torch import nn
+import attrs
 
 from .convnext import ConvNext
 from .fpn import FpnNeck, FpnHead
@@ -23,23 +24,25 @@ class AdaptiveScalingNeckHeadType(Enum):
     UPERNEXT = 'upernext'
 
 
+@attrs.define
+class AdaptiveScalingConfig:
+    size: AdaptiveScalingSize
+    neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
+    init_scale_output_bias: float = 8.0
+
+
 class AdaptiveScaling(nn.Module):
 
-    def __init__(
-        self,
-        size: AdaptiveScalingSize,
-        neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN,
-        init_scale_output_bias: float = 8.0,
-    ):
+    def __init__(self, config: AdaptiveScalingConfig):
         super().__init__()
 
-        if size == AdaptiveScalingSize.TINY:
+        if config.size == AdaptiveScalingSize.TINY:
             backbone_creator = ConvNext.create_tiny
-        elif size == AdaptiveScalingSize.SMALL:
+        elif config.size == AdaptiveScalingSize.SMALL:
             backbone_creator = ConvNext.create_small
-        elif size == AdaptiveScalingSize.BASE:
+        elif config.size == AdaptiveScalingSize.BASE:
             backbone_creator = ConvNext.create_base
-        elif size == AdaptiveScalingSize.LARGE:
+        elif config.size == AdaptiveScalingSize.LARGE:
             backbone_creator = ConvNext.create_large
         else:
             raise NotImplementedError()
@@ -47,10 +50,10 @@ class AdaptiveScaling(nn.Module):
         # 4x downsampling.
         self.backbone = backbone_creator()
 
-        if neck_head_type == AdaptiveScalingNeckHeadType.FPN:
+        if config.neck_head_type == AdaptiveScalingNeckHeadType.FPN:
             neck_creator = FpnNeck
             head_creator = FpnHead
-        elif neck_head_type == AdaptiveScalingNeckHeadType.UPERNEXT:
+        elif config.neck_head_type == AdaptiveScalingNeckHeadType.UPERNEXT:
             neck_creator = UperNextNeck
             head_creator = UperNextHead
         else:
@@ -74,7 +77,7 @@ class AdaptiveScaling(nn.Module):
             in_channels=neck_out_channels,
             out_channels=1,
             upsampling_factor=2,
-            init_output_bias=init_scale_output_bias,
+            init_output_bias=config.init_scale_output_bias,
         )
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore
