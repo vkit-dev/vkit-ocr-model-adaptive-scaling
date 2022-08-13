@@ -13,8 +13,8 @@ from .l1 import L1LossFunction
 @attrs.define
 class AdaptiveScalingLossFunctionConifg:
     bce_negative_ratio: float = 3.0
-    bce_factor: float = 0.0
-    focal_factor: float = 3.0
+    bce_factor: float = 2.0
+    focal_factor: float = 0.0
     dice_factor: float = 1.0
     l1_factor: float = 1.0
     downsampled_score_map_min: float = 1.1
