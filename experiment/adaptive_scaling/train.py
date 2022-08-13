@@ -4,6 +4,7 @@ from enum import Enum, unique
 import logging
 import statistics
 import shutil
+import gc
 
 import attrs
 import cattrs
@@ -334,6 +335,8 @@ def train(
             train_adaptive_scaling_dataset.pipeline_pool.cleanup()
             del train_adaptive_scaling_dataset
             del train_data_loader
+            gc.collect()
+
             train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
                 AdaptiveScalingIterableDatasetConfig(
                     steps_json=train_adaptive_scaling_dataset_steps_json,
