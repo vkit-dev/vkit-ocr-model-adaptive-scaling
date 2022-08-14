@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Iterable, Dict, List, Any, Sequence
+from typing import Tuple, Optional, Iterable, Dict, List, Any, Sequence, Mapping
 import logging
 
 import numpy as np
@@ -21,7 +21,7 @@ from vkit.pipeline import (
 
 logger = logging.getLogger(__name__)
 
-Sample = Tuple[Image, Tuple[int, int], Box, Mask, ScoreMap]
+Sample = Tuple[Image, Tuple[int, int], Box, Mask, ScoreMap, Mapping]
 
 
 class AdaptiveScalingPipelinePostProcessor(
@@ -32,6 +32,7 @@ class AdaptiveScalingPipelinePostProcessor(
 ):  # yapf: disable
 
     def generate_output(self, state: PipelineState, rng: RandomGenerator):
+        rng_state = state.get_value('_rng_state', Mapping)
         page_cropping_step_output = state.get_pipeline_step_output(PageCroppingStep)
         samples: List[Sample] = []
         for cropped_page in page_cropping_step_output.cropped_pages:
@@ -43,6 +44,7 @@ class AdaptiveScalingPipelinePostProcessor(
                 downsampled_label.core_box,
                 downsampled_label.page_char_mask,
                 downsampled_label.page_char_height_score_map,
+                rng_state,
             ))
         return samples
 
@@ -130,6 +132,7 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):
 
     downsampled_shape = None
     downsampled_core_box = None
+    rng_states: List[Mapping] = []
 
     for (
         image,
@@ -137,6 +140,7 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):
         downsampled_core_box,
         downsampled_mask,
         downsampled_score_map,
+        rng_state,
     ) in batch:
         default_batch.append({
             # (H, W, 3) -> (3, H, W).
@@ -146,10 +150,12 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Sample]):
         })
         downsampled_shape = downsampled_shape
         downsampled_core_box = downsampled_core_box
+        rng_states.append(rng_state)
 
     assert downsampled_shape and downsampled_core_box
     collated_batch: Dict[str, Any] = default_collate(default_batch)
     collated_batch['downsampled_shape'] = downsampled_shape
     collated_batch['downsampled_core_box'] = downsampled_core_box
+    collated_batch['rng_states'] = rng_states
 
     return collated_batch

@@ -1,3 +1,5 @@
+from typing import Sequence, Mapping
+
 import torch
 from torch.utils.data import DataLoader
 from torchinfo import summary
@@ -113,6 +115,7 @@ def sample_adaptive_scaling_dataset(
         batch_downsampled_score_map = batch['downsampled_score_map']
         downsampled_shape = batch['downsampled_shape']
         downsampled_core_box: Box = batch['downsampled_core_box']
+        rng_states: Sequence[Mapping] = batch['rng_states']
 
         assert batch_image.shape[0] \
             == batch_downsampled_mask.shape[0] \
@@ -157,6 +160,9 @@ def sample_adaptive_scaling_dataset(
             painter = Painter.create(downsampled_image)
             painter.paint_score_map(downsampled_score_map, alpha=1.0)
             painter.to_file(out_fd / f'{output_prefix}_downsampled_score_map_alpha_1.jpg')
+
+            rng_state = rng_states[sample_in_batch_idx]
+            io.write_json(out_fd / f'{output_prefix}_rng_state.json', rng_state)
 
 
 def profile_adaptive_scaling_dataset(num_processes: int, batch_size: int, epoch_size: int):
