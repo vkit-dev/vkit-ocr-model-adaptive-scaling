@@ -46,7 +46,7 @@ class EpochConfig:
     train_num_batches: int = 672
     train_batch_size: int = 7
     train_rng_seed: int = 13371
-    train_num_processes: int = 12
+    train_num_processes: int = 16
     dev_num_batches: int = 68
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
