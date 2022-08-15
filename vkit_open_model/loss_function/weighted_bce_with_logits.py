@@ -15,7 +15,7 @@ class WeightedBceWithLogitsLossFunction:
         pred: torch.Tensor,
         gt: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
-    ):
+    ) -> torch.Tensor:
         positive_mask = gt
         negative_mask = (1 - gt)
         if mask is not None:

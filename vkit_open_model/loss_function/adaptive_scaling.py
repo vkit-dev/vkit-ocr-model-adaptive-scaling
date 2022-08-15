@@ -2,37 +2,39 @@ from typing import Tuple
 
 import torch
 from vkit.element import Box
+import attrs
 
 from .weighted_bce_with_logits import WeightedBceWithLogitsLossFunction
+from .focal_with_logits import FocalWithLogitsLossFunction
 from .dice import DiceLossFunction
 from .l1 import L1LossFunction
 
 
+@attrs.define
+class AdaptiveScalingLossFunctionConifg:
+    bce_negative_ratio: float = 3.0
+    bce_factor: float = 0.0
+    focal_factor: float = 5.0
+    dice_factor: float = 1.0
+    l1_factor: float = 1.0
+    downsampled_score_map_min: float = 1.1
+    scale_feature_min: float = 1.1
+
+
 class AdaptiveScalingLossFunction:
 
-    def __init__(
-        self,
-        negative_ratio: float = 3.0,
-        bce_factor: float = 2.0,
-        dice_factor: float = 1.0,
-        l1_factor: float = 1.0,
-        downsampled_score_map_min: float = 1.1,
-        scale_feature_min: float = 1.1,
-    ):
-        # Mask.
-        self.bce_factor = bce_factor
-        self.weighted_bce_with_logits = WeightedBceWithLogitsLossFunction(
-            negative_ratio=negative_ratio,
-        )
+    def __init__(self, config: AdaptiveScalingLossFunctionConifg):
+        self.config = config
 
-        self.dice_factor = dice_factor
+        # Mask.
+        self.weighted_bce_with_logits = WeightedBceWithLogitsLossFunction(
+            negative_ratio=config.bce_negative_ratio,
+        )
+        self.focal_with_logits = FocalWithLogitsLossFunction()
         self.dice = DiceLossFunction()
 
         # Scale.
-        self.l1_factor = l1_factor
         self.l1 = L1LossFunction(smooth=True)
-        self.downsampled_score_map_min = downsampled_score_map_min
-        self.scale_feature_min = scale_feature_min
 
     def __call__(
         self,
@@ -56,34 +58,47 @@ class AdaptiveScalingLossFunction:
         mask_feature = mask_feature[:, dc_box.up:dc_box.down + 1, dc_box.left:dc_box.right + 1]
         scale_feature = scale_feature[:, dc_box.up:dc_box.down + 1, dc_box.left:dc_box.right + 1]
 
+        loss = 0.0
+
         # Mask.
-        loss = self.bce_factor * self.weighted_bce_with_logits(
-            pred=mask_feature,
-            gt=downsampled_mask,
-        )
-        loss += self.dice_factor * self.dice(
-            pred=torch.sigmoid(mask_feature),
-            gt=downsampled_mask,
-        )
+        if self.config.bce_factor > 0.0:
+            loss += self.config.bce_factor * self.weighted_bce_with_logits(
+                pred=mask_feature,
+                gt=downsampled_mask,
+            )
+
+        if self.config.focal_factor > 0.0:
+            loss += self.config.focal_factor * self.focal_with_logits(
+                pred=mask_feature,
+                gt=downsampled_mask,
+            )
+
+        if self.config.dice_factor > 0.0:
+            loss += self.config.dice_factor * self.dice(
+                pred=torch.sigmoid(mask_feature),
+                gt=downsampled_mask,
+            )
 
         # Scale.
-        # NOTE: critical mask!
-        l1_mask = ((scale_feature > self.scale_feature_min)
-                   & (downsampled_score_map > self.downsampled_score_map_min)
-                   & downsampled_mask.bool()).float()
-        scale_feature = torch.clamp(
-            scale_feature,
-            min=self.scale_feature_min,
-        )
-        downsampled_score_map = torch.clamp(
-            downsampled_score_map,
-            min=self.downsampled_score_map_min,
-        )
-        # Log space + smooth L1 to model the relative scale difference.
-        loss += self.l1_factor * self.l1(
-            pred=torch.log(scale_feature),
-            gt=torch.log(downsampled_score_map),
-            mask=l1_mask,
-        )
+        if self.config.l1_factor > 0.0:
+            # NOTE: critical mask!
+            l1_mask = ((scale_feature > self.config.scale_feature_min)
+                       & (downsampled_score_map > self.config.downsampled_score_map_min)
+                       & downsampled_mask.bool()).float()
+            scale_feature = torch.clamp(
+                scale_feature,
+                min=self.config.scale_feature_min,
+            )
+            downsampled_score_map = torch.clamp(
+                downsampled_score_map,
+                min=self.config.downsampled_score_map_min,
+            )
+            # Log space + smooth L1 to model the relative scale difference.
+            loss += self.config.l1_factor * self.l1(
+                pred=torch.log(scale_feature),
+                gt=torch.log(downsampled_score_map),
+                mask=l1_mask,
+            )
 
+        assert not isinstance(loss, float)
         return loss
