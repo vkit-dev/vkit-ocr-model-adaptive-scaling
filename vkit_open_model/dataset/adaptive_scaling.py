@@ -9,14 +9,13 @@ import attrs
 from vkit.element import Image, Mask, ScoreMap, Box
 from vkit.utility import PathType
 from vkit.pipeline import (
-    PipelineState,
-    PageCroppingStep,
-    NoneTypePipelinePostProcessorConfig,
+    pipeline_step_collection_factory,
+    PageCroppingStepOutput,
     PipelinePostProcessor,
     PipelinePostProcessorFactory,
+    PipelineRunRngStateOutput,
     Pipeline,
     PipelinePool,
-    pipeline_step_collection_factory,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,16 +23,32 @@ logger = logging.getLogger(__name__)
 Sample = Tuple[Image, Tuple[int, int], Box, Mask, ScoreMap, Mapping]
 
 
+@attrs.define
+class AdaptiveScalingPipelinePostProcessorConfig:
+    pass
+
+
+@attrs.define
+class AdaptiveScalingPipelinePostProcessorInput:
+    pipeline_run_rng_state_output: PipelineRunRngStateOutput
+    page_cropping_step_output: PageCroppingStepOutput
+
+
 class AdaptiveScalingPipelinePostProcessor(
     PipelinePostProcessor[
-        NoneTypePipelinePostProcessorConfig,
+        AdaptiveScalingPipelinePostProcessorConfig,
+        AdaptiveScalingPipelinePostProcessorInput,
         Sequence[Sample],
     ]
 ):  # yapf: disable
 
-    def generate_output(self, state: PipelineState, rng: RandomGenerator):
-        rng_state = state.get_value('_rng_state', Mapping)
-        page_cropping_step_output = state.get_pipeline_step_output(PageCroppingStep)
+    def generate_output(
+        self,
+        input: AdaptiveScalingPipelinePostProcessorInput,
+        rng: RandomGenerator,
+    ):
+        rng_state = input.pipeline_run_rng_state_output.rng_state
+        page_cropping_step_output = input.page_cropping_step_output
         samples: List[Sample] = []
         for cropped_page in page_cropping_step_output.cropped_pages:
             downsampled_label = cropped_page.downsampled_label

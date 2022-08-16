@@ -95,7 +95,7 @@ def sample_adaptive_scaling_dataset(
     dataset = AdaptiveScalingIterableDataset(
         AdaptiveScalingIterableDatasetConfig(
             steps_json=(
-                '$VKIT_ARTIFACT_PACK/pipeline/text_detection/dev_adaptive_scaling_dataset_steps.json'
+                '$VKIT_ARTIFACT_PACK/pipeline/text_detection/dev_adaptive_scaling_dataset_steps.json'  # noqa
             ),
             num_samples=num_samples,
             rng_seed=13,
