@@ -20,6 +20,15 @@ def conv3x3(in_channels: int, out_channels: int):
     )
 
 
+def conv5x5(in_channels: int, out_channels: int):
+    return nn.Conv2d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=5,
+        padding=2,
+    )
+
+
 def pconv2x2(in_channels: int, out_channels: int):
     return nn.Conv2d(
         in_channels=in_channels,

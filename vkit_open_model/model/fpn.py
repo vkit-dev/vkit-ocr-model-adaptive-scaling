@@ -27,6 +27,16 @@ def build_conv3x3_block(in_channels: int, out_channels: int):
     )
 
 
+def build_conv5x5_block(in_channels: int, out_channels: int):
+    return nn.Sequential(
+        helper.conv5x5(in_channels=in_channels, out_channels=out_channels),
+        helper.permute_bchw_to_bhwc(),
+        helper.ln(in_channels=out_channels),
+        helper.permute_bhwc_to_bchw(),
+        helper.gelu(),
+    )
+
+
 class FpnNeck(nn.Module):
 
     @staticmethod
@@ -137,11 +147,23 @@ class FpnHead(nn.Module):
         self.upsampling_factor = upsampling_factor
 
         inner_channels = (in_channels + out_channels) // 2
-        self.step1_conv3x3 = build_conv3x3_block(
-            in_channels=in_channels,
-            out_channels=inner_channels,
-        )
-        self.step2_conv1x1 = nn.Sequential(
+
+        # Smoothing.
+        if 1 <= self.upsampling_factor <= 2:
+            self.step1_conv = build_conv3x3_block(
+                in_channels=in_channels,
+                out_channels=inner_channels,
+            )
+        elif 2 < self.upsampling_factor <= 4:
+            self.step1_conv = build_conv5x5_block(
+                in_channels=in_channels,
+                out_channels=inner_channels,
+            )
+        else:
+            raise NotImplementedError()
+
+        # Projection.
+        self.step2_conv = nn.Sequential(
             helper.permute_bchw_to_bhwc(),
             helper.conv1x1(in_channels=inner_channels, out_channels=out_channels),
             helper.permute_bhwc_to_bchw(),
@@ -153,7 +175,7 @@ class FpnHead(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-        nn.init.constant_(self.step2_conv1x1[1].bias, init_output_bias)  # type: ignore
+        nn.init.constant_(self.step2_conv[1].bias, init_output_bias)  # type: ignore
 
     def forward(self, fpn_neck_feature: torch.Tensor) -> torch.Tensor:  # type: ignore
         x = fpn_neck_feature
@@ -168,6 +190,6 @@ class FpnHead(nn.Module):
                 mode='nearest',
             )
 
-        x = self.step1_conv3x3(x)
-        x = self.step2_conv1x1(x)
+        x = self.step1_conv(x)
+        x = self.step2_conv(x)
         return x
