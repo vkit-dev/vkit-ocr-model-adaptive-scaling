@@ -47,7 +47,7 @@ class AdaptiveScaling(nn.Module):
         else:
             raise NotImplementedError()
 
-        # 4x downsampling.
+        # Shared backbone, 4x downsampling.
         self.backbone = backbone_creator()
 
         if config.neck_head_type == AdaptiveScalingNeckHeadType.FPN:
@@ -61,28 +61,93 @@ class AdaptiveScaling(nn.Module):
 
         neck_out_channels = self.backbone.in_channels_group[-2]
 
-        # Shared neck.
-        self.neck = neck_creator(
+        # Neck for rough detection.
+        self.rough_neck = neck_creator(
             in_channels_group=self.backbone.in_channels_group,
             out_channels=neck_out_channels,
         )
 
-        # Two heads, 2x upsampling, leading to 2x E2E downsampling.
-        self.mask_head = head_creator(
+        # 2 heads, 2x upsampling, leading to 2x E2E downsampling.
+        self.rough_char_mask_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=1,
             upsampling_factor=2,
         )
-        self.scale_head = head_creator(
-            in_channels=neck_out_channels,
-            out_channels=1,
-            upsampling_factor=2,
-            init_output_bias=config.init_scale_output_bias,
+        self.rough_char_scale_head = nn.Sequential(
+            head_creator(
+                in_channels=neck_out_channels,
+                out_channels=1,
+                upsampling_factor=2,
+                init_output_bias=config.init_scale_output_bias,
+            ),
+            # Force predicting positive value.
+            nn.Softplus(),
         )
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore
-        features = self.backbone(x)
-        neck_feature = self.neck(features)
-        mask_feature = self.mask_head(neck_feature)
-        scale_feature = self.scale_head(neck_feature)
-        return mask_feature, scale_feature
+        # Neck for precise detection.
+        self.precise_neck = neck_creator(
+            in_channels_group=self.backbone.in_channels_group,
+            out_channels=neck_out_channels,
+        )
+
+        # 4 heads, 2x upsampling, leading to 2x E2E downsampling.
+        self.precise_char_prob_head = head_creator(
+            in_channels=neck_out_channels,
+            out_channels=1,
+            upsampling_factor=2,
+        )
+        self.precise_char_up_left_corner_offset_head = head_creator(
+            in_channels=neck_out_channels,
+            out_channels=2,
+            upsampling_factor=2,
+        )
+        self.precise_char_corner_angle_head = head_creator(
+            in_channels=neck_out_channels,
+            out_channels=4,
+            upsampling_factor=2,
+        )
+        self.precise_char_corner_distance_head = nn.Sequential(
+            head_creator(
+                in_channels=neck_out_channels,
+                out_channels=3,
+                upsampling_factor=2,
+            ),
+            # Force predicting positive value.
+            nn.Softplus(),
+        )
+
+    @torch.jit.export  # type: ignore
+    def forward_rough(
+        self,
+        x: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:  # type: ignore
+        feature = self.backbone(x)
+
+        rough_neck_feature = self.rough_neck(feature)
+        rough_char_mask_feature = self.rough_char_mask_head(rough_neck_feature)
+        rough_char_scale_feature = self.rough_char_scale_head(rough_neck_feature)
+
+        return rough_char_mask_feature, rough_char_scale_feature
+
+    @torch.jit.export  # type: ignore
+    def forward_precise(
+        self,
+        x: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:  # type: ignore
+        feature = self.backbone(x)
+
+        precise_neck_feature = self.precise_neck(feature)
+        precise_char_prob_feature = self.precise_char_prob_head(precise_neck_feature)
+        precise_char_up_left_corner_offset_feature = \
+            self.precise_char_up_left_corner_offset_head(precise_neck_feature)
+        precise_char_corner_angle_feature = \
+            self.precise_char_corner_angle_head(precise_neck_feature)
+        precise_char_corner_distance_feature = \
+            self.precise_char_corner_distance_head(precise_neck_feature)
+
+        return (
+            precise_char_prob_feature,
+            precise_char_up_left_corner_offset_feature,
+            precise_char_corner_angle_feature,
+            precise_char_corner_distance_feature,
+        )
