@@ -45,7 +45,7 @@ class PreciseSample:
 
 @attrs.define
 class AdaptiveScalingPipelinePostProcessorConfig:
-    precise_to_rough_ratio: float = 0.25
+    pass
 
 
 @attrs.define
@@ -93,12 +93,13 @@ class AdaptiveScalingPipelinePostProcessor(
             rng,
             page_text_region_cropping_step_output.cropped_page_text_regions,
         )
-        num_rough_to_precise = round(
-            self.config.precise_to_rough_ratio * len(cropped_page_text_regions)
-        )
+        assert len(cropped_page_text_regions) >= len(rough_samples)
+        num_precise_transformed_to_rough = \
+            (len(cropped_page_text_regions) + len(rough_samples)) // 2 - len(rough_samples)
 
         # Some will be transformed for rough prediction.
-        for cropped_page_text_region in cropped_page_text_regions[:num_rough_to_precise]:
+        for cropped_page_text_region in \
+                cropped_page_text_regions[:num_precise_transformed_to_rough]:
             downsampled_label = cropped_page_text_region.downsampled_label
             assert downsampled_label
             rough_samples.append(
@@ -113,7 +114,8 @@ class AdaptiveScalingPipelinePostProcessor(
             )
 
         # And the rest will be used to train precise prediction.
-        for cropped_page_text_region in cropped_page_text_regions[num_rough_to_precise:]:
+        for cropped_page_text_region in \
+                cropped_page_text_regions[num_precise_transformed_to_rough:]:
             downsampled_label = cropped_page_text_region.downsampled_label
             assert downsampled_label
             precise_samples.append(
@@ -184,15 +186,22 @@ class AdaptiveScalingIterableDataset(IterableDataset):
                 rough_samples, precise_samples = self.pipeline_pool.run()
                 self.dev_rough_samples.extend(rough_samples)
                 self.dev_precise_samples.extend(precise_samples)
+                logger.info(
+                    'dev samples: '
+                    f'rough_samples={len(self.dev_rough_samples)}, '
+                    f'precise_samples={len(self.dev_precise_samples)}'
+                )
 
             self.dev_rough_samples = self.dev_rough_samples[:config.num_samples]
             self.dev_precise_samples = self.dev_precise_samples[:config.num_samples]
+            logger.info('Done dev cache.')
             self.pipeline_pool.cleanup()
 
     def __iter__(self):
         if self.config.is_dev:
             assert len(self.dev_rough_samples) == self.config.num_samples
-            yield from self.dev_rough_samples
+            assert len(self.dev_precise_samples) == self.config.num_samples
+            yield from zip(self.dev_rough_samples, self.dev_precise_samples)
             return
 
         cached_rough_samples: List[RoughSample] = []
