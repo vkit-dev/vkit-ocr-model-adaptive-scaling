@@ -167,6 +167,7 @@ class AdaptiveScalingPreciseLossFunction:
         # Ground truths.
         # (B, CH, CW)
         downsampled_char_prob_score_map: torch.Tensor,
+        downsampled_char_mask: torch.Tensor,
         downsampled_shape: Tuple[int, int],
         downsampled_core_box: Box,
         # Label points.
@@ -226,6 +227,7 @@ class AdaptiveScalingPreciseLossFunction:
             loss += self.config.char_prob_l1_factor * self.char_prob_l1(
                 pred=torch.sigmoid(precise_char_prob_feature),
                 gt=downsampled_char_prob_score_map,
+                mask=downsampled_char_mask,
             )
 
         if self.config.char_up_left_offset_l1_factor > 0:

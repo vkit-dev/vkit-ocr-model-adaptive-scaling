@@ -38,6 +38,7 @@ class PreciseSample:
     image: Image
     downsampled_shape: Tuple[int, int]
     downsampled_core_box: Box
+    downsampled_mask: Mask
     downsampled_score_map: ScoreMap
     downsampled_page_char_regression_labels: Sequence[PageCharRegressionLabel]
     rng_state: Mapping
@@ -123,6 +124,7 @@ class AdaptiveScalingPipelinePostProcessor(
                     image=cropped_page_text_region.page_image,
                     downsampled_shape=downsampled_label.shape,
                     downsampled_core_box=downsampled_label.core_box,
+                    downsampled_mask=downsampled_label.page_char_mask,
                     downsampled_score_map=downsampled_label.page_char_gaussian_score_map,
                     downsampled_page_char_regression_labels=(
                         downsampled_label.page_char_regression_labels
@@ -286,6 +288,7 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Tuple[RoughSample, Preci
         rough_batch_downsampled_shape = rough_sample.downsampled_shape
         rough_batch_downsampled_core_box = rough_sample.downsampled_core_box
         rough_batch_rng_states.append(rough_sample.rng_state)
+        del rough_sample
 
         downsampled_page_char_regression_labels = \
             precise_sample.downsampled_page_char_regression_labels
@@ -322,6 +325,7 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Tuple[RoughSample, Preci
         default_precise_batch.append({
             # (H, W, 3) -> (3, H, W).
             'image': np.transpose(precise_sample.image.mat, axes=(2, 0, 1)).astype(np.float32),
+            'downsampled_mask': precise_sample.downsampled_mask.np_mask.astype(np.float32),
             'downsampled_score_map': precise_sample.downsampled_score_map.mat,
             'downsampled_label_point_y': downsampled_label_point_y,
             'downsampled_label_point_x': downsampled_label_point_x,

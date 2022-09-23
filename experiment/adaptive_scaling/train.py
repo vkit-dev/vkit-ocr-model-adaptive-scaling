@@ -397,6 +397,7 @@ def train(
 
             rough_avg_loss = metrics.update(MetricsTag.TRAIN_ROUGH_LOSS, float(rough_loss))
             rough_loss.backward()
+            del rough_batch
             del rough_loss
 
             # Train precise prediction.
@@ -416,6 +417,7 @@ def train(
                 precise_char_corner_angle_feature=precise_char_corner_angle_feature,
                 precise_char_corner_distance_feature=precise_char_corner_distance_feature,
                 downsampled_char_prob_score_map=precise_batch['downsampled_score_map'],
+                downsampled_char_mask=precise_batch['downsampled_mask'],
                 downsampled_shape=precise_batch['downsampled_shape'],
                 downsampled_core_box=precise_batch['downsampled_core_box'],
                 downsampled_label_point_y=precise_batch['downsampled_label_point_y'],
@@ -428,6 +430,7 @@ def train(
 
             precise_avg_loss = metrics.update(MetricsTag.TRAIN_PRECISE_LOSS, float(precise_loss))
             precise_loss.backward()
+            del precise_batch
             del precise_loss
 
             if optimizer_config.clip_grad_norm_max_norm is not None:
@@ -499,6 +502,7 @@ def train(
                 precise_char_corner_angle_feature=precise_char_corner_angle_feature,
                 precise_char_corner_distance_feature=precise_char_corner_distance_feature,
                 downsampled_char_prob_score_map=precise_batch['downsampled_score_map'],
+                downsampled_char_mask=precise_batch['downsampled_mask'],
                 downsampled_shape=precise_batch['downsampled_shape'],
                 downsampled_core_box=precise_batch['downsampled_core_box'],
                 downsampled_label_point_y=precise_batch['downsampled_label_point_y'],
