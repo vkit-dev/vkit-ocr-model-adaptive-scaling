@@ -194,17 +194,8 @@ class AdaptiveScalingIterableDataset(IterableDataset):
 
             self.dev_rough_samples = self.dev_rough_samples[:config.num_samples]
             self.dev_precise_samples = self.dev_precise_samples[:config.num_samples]
-            logger.info('Done dev cache.')
-            self.pipeline_pool.cleanup()
 
-    def __iter__(self):
-        if self.config.is_dev:
-            assert len(self.dev_rough_samples) == self.config.num_samples
-            assert len(self.dev_precise_samples) == self.config.num_samples
-
-            for rough_sample, precise_sample in \
-                    zip(self.dev_rough_samples, self.dev_precise_samples):
-
+            for precise_sample in self.dev_precise_samples:
                 downsampled_page_char_regression_labels = \
                     precise_sample.downsampled_page_char_regression_labels
                 precise_sample.downsampled_page_char_regression_labels = rng_choice_with_size(
@@ -217,8 +208,14 @@ class AdaptiveScalingIterableDataset(IterableDataset):
                     ),
                 )
 
-                yield (rough_sample, precise_sample)
+            logger.info('Done dev cache.')
+            self.pipeline_pool.cleanup()
 
+    def __iter__(self):
+        if self.config.is_dev:
+            assert len(self.dev_rough_samples) == self.config.num_samples
+            assert len(self.dev_precise_samples) == self.config.num_samples
+            yield from zip(self.dev_rough_samples, self.dev_precise_samples)
             return
 
         cached_rough_samples: List[RoughSample] = []
