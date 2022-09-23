@@ -44,12 +44,12 @@ logger = logging.getLogger(__name__)
 class EpochConfig:
     torch_seed: int = 133
     num_epochs: int = 210
-    num_page_char_regression_labels: int = 100
+    num_page_char_regression_labels: int = 200
     train_num_batches: int = 336
     train_batch_size: int = 6
     train_rng_seed: int = 13371
-    train_num_processes: int = 16
-    dev_num_batches: int = 68
+    train_num_processes: int = 15
+    dev_num_batches: int = 48
     dev_batch_size: int = 32
     dev_rng_seed: int = 13
     dev_num_processes: int = 32

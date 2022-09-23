@@ -201,7 +201,24 @@ class AdaptiveScalingIterableDataset(IterableDataset):
         if self.config.is_dev:
             assert len(self.dev_rough_samples) == self.config.num_samples
             assert len(self.dev_precise_samples) == self.config.num_samples
-            yield from zip(self.dev_rough_samples, self.dev_precise_samples)
+
+            for rough_sample, precise_sample in \
+                    zip(self.dev_rough_samples, self.dev_precise_samples):
+
+                downsampled_page_char_regression_labels = \
+                    precise_sample.downsampled_page_char_regression_labels
+                precise_sample.downsampled_page_char_regression_labels = rng_choice_with_size(
+                    self.rng,
+                    downsampled_page_char_regression_labels,
+                    size=self.config.num_page_char_regression_labels,
+                    replace=(
+                        len(downsampled_page_char_regression_labels) <  # noqa
+                        self.config.num_page_char_regression_labels
+                    ),
+                )
+
+                yield (rough_sample, precise_sample)
+
             return
 
         cached_rough_samples: List[RoughSample] = []
