@@ -44,9 +44,9 @@ logger = logging.getLogger(__name__)
 class EpochConfig:
     torch_seed: int = 133
     num_epochs: int = 210
-    num_page_char_regression_labels: int = 20
-    train_num_batches: int = 672
-    train_batch_size: int = 7
+    num_page_char_regression_labels: int = 100
+    train_num_batches: int = 336
+    train_batch_size: int = 6
     train_rng_seed: int = 13371
     train_num_processes: int = 16
     dev_num_batches: int = 68
@@ -206,16 +206,6 @@ def train(
         io.file(dataset_config.dev_adaptive_scaling_dataset_steps_json, expandvars=True),
         out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
-    dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        AdaptiveScalingIterableDatasetConfig(
-            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
-            num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
-            num_samples=dev_num_samples,
-            rng_seed=epoch_config.dev_rng_seed,
-            num_processes=epoch_config.dev_num_processes,
-            is_dev=True,
-        )
-    )
 
     assert len(dataset_config.epoch_indices) \
         == len(dataset_config.train_adaptive_scaling_dataset_steps_jsons)
@@ -323,11 +313,7 @@ def train(
         epoch_idx = reset_epoch_idx_to_value
 
     # Dataloader.
-    dev_data_loader = DataLoader(
-        dev_adaptive_scaling_dataset,
-        collate_fn=adaptive_scaling_dataset_collate_fn,
-        batch_size=epoch_config.dev_batch_size,
-    )
+    dev_data_loader: Optional[DataLoader] = None
     train_data_loader = DataLoader(
         train_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
@@ -460,6 +446,23 @@ def train(
         dev_rough_losses: List[float] = []
         dev_precise_losses: List[float] = []
         dev_losses: List[float] = []
+
+        if dev_data_loader is None:
+            dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+                AdaptiveScalingIterableDatasetConfig(
+                    steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+                    num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
+                    num_samples=dev_num_samples,
+                    rng_seed=epoch_config.dev_rng_seed,
+                    num_processes=epoch_config.dev_num_processes,
+                    is_dev=True,
+                )
+            )
+            dev_data_loader = DataLoader(
+                dev_adaptive_scaling_dataset,
+                collate_fn=adaptive_scaling_dataset_collate_fn,
+                batch_size=epoch_config.dev_batch_size,
+            )
 
         for batch_idx, batch in enumerate(dev_data_loader, start=1):
             # Evaluate rough prediction.
