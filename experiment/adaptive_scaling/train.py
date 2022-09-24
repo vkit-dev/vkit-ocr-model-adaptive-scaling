@@ -484,6 +484,7 @@ def train(
             rough_loss /= 2
 
             rough_avg_loss = metrics.update(MetricsTag.DEV_ROUGH_LOSS, float(rough_loss))
+            del rough_batch
 
             # Evaluate precise prediction.
             precise_batch = batch_to_device(batch['precise'], device)
@@ -515,6 +516,7 @@ def train(
             precise_loss /= 2
 
             precise_avg_loss = metrics.update(MetricsTag.DEV_PRECISE_LOSS, float(precise_loss))
+            del precise_batch
 
             if batch_idx % 4 == 0 or batch_idx >= epoch_config.dev_num_batches:
                 logger.info(
