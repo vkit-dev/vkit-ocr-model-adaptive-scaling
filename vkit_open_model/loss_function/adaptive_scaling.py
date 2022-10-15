@@ -124,6 +124,7 @@ class AdaptiveScalingPreciseLossFunctionConifg:
     char_up_left_offset_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
     char_corner_distance_l1_factor: float = 1.0
+    loss_factor: float = 0.15
 
 
 class AdaptiveScalingPreciseLossFunction:
@@ -132,13 +133,13 @@ class AdaptiveScalingPreciseLossFunction:
         self.config = config
 
         # Prob.
-        self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.5)
+        self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.25)
         # Up-left corner.
-        self.char_up_left_offset_l1 = L1LossFunction(smooth=True, smooth_beta=5.0)
+        self.char_up_left_offset_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
         # Corner angle.
         self.char_corner_angle_cross_entropy = CrossEntropyWithLogitsLossFunction()
         # Corner distance.
-        self.char_corner_distance_l1 = L1LossFunction(smooth=True, smooth_beta=5.0)
+        self.char_corner_distance_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
 
     @classmethod
     def get_label_point_feature(
@@ -251,4 +252,8 @@ class AdaptiveScalingPreciseLossFunction:
             )
 
         assert not isinstance(loss, float)
+
+        # Balance gradiant.
+        loss *= self.config.loss_factor
+
         return loss

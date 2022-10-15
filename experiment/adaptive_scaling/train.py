@@ -66,7 +66,7 @@ class OptimizerConfig:
     cosine_annealing_warm_restarts_t0: int = 14
     cosine_annealing_warm_restarts_tmulti: int = 3
     cosine_annealing_warm_restarts_eta_min: float = 1E-5
-    clip_grad_norm_max_norm: Optional[float] = None
+    clip_grad_norm_max_norm: Optional[float] = 2.0
 
 
 @unique
