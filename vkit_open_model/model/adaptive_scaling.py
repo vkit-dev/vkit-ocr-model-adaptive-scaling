@@ -1,5 +1,6 @@
-from typing import Tuple
+from typing import Tuple, Dict, Mapping
 from enum import Enum, unique
+import logging
 
 import torch
 from torch import nn
@@ -8,6 +9,8 @@ import attrs
 from .convnext import ConvNext
 from .fpn import FpnNeck, FpnHead
 from .upernext import UperNextNeck, UperNextHead
+
+logger = logging.getLogger(__name__)
 
 
 @unique
@@ -150,4 +153,64 @@ class AdaptiveScaling(nn.Module):
             precise_char_up_left_corner_offset_feature,
             precise_char_corner_angle_feature,
             precise_char_corner_distance_feature,
+        )
+
+    @classmethod
+    def debug_get_rough_name_to_grad(cls, model: torch.nn.Module):
+        rough_name_to_grad: Dict[str, torch.Tensor] = {}
+        for name, parameter in model.named_parameters():
+            if parameter.grad is None:
+                continue
+            assert name not in rough_name_to_grad
+            rough_name_to_grad[name] = parameter.grad.cpu().clone()  # type: ignore
+        return rough_name_to_grad
+
+    @classmethod
+    def debug_get_precise_name_to_grad(
+        cls,
+        model: torch.nn.Module,
+        rough_name_to_grad: Mapping[str, torch.Tensor],
+    ):
+        precise_name_to_grad: Dict[str, torch.Tensor] = {}
+        for name, parameter in model.named_parameters():
+            if parameter.grad is None:
+                continue
+            if name not in rough_name_to_grad:
+                continue
+            assert name not in precise_name_to_grad
+            precise_name_to_grad[name] = \
+                parameter.grad.cpu() - rough_name_to_grad[name]  # type: ignore
+        return precise_name_to_grad
+
+    @classmethod
+    def debug_inspect_name_to_grad(
+        cls,
+        rough_name_to_grad: Mapping[str, torch.Tensor],
+        precise_name_to_grad: Mapping[str, torch.Tensor],
+    ):
+        names = sorted(set(rough_name_to_grad) & set(precise_name_to_grad))
+
+        rough_abs_grads = torch.abs(
+            torch.cat([rough_name_to_grad[name].view(-1) for name in names])
+        )
+        rough_abs_grads_mean = float(torch.mean(rough_abs_grads))
+        rough_abs_grads_std = float(torch.std(rough_abs_grads))
+        logger.info(
+            f'rough_abs_grads_mean = {rough_abs_grads_mean}, '
+            f'rough_abs_grads_std = {rough_abs_grads_std}'
+        )
+
+        precise_abs_grads = torch.abs(
+            torch.cat([precise_name_to_grad[name].view(-1) for name in names])
+        )
+        precise_abs_grads_mean = float(torch.mean(precise_abs_grads))
+        precise_abs_grads_std = float(torch.std(precise_abs_grads))
+        logger.info(
+            f'precise_abs_grads_mean = {precise_abs_grads_mean}, '
+            f'precise_abs_grads_std = {precise_abs_grads_std}'
+        )
+
+        logger.info(
+            'rough_abs_grads_mean / precise_abs_grads_mean = '
+            f'{rough_abs_grads_mean / (precise_abs_grads_mean + 1E-15)}'
         )

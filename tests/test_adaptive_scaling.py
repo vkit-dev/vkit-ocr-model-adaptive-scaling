@@ -111,7 +111,7 @@ def test_adaptive_scaling_jit_loss_backward():
 
     loss_function = AdaptiveScalingRoughLossFunction(AdaptiveScalingRoughLossFunctionConifg())
 
-    x = torch.rand((2, 3, 640, 640))
+    x = torch.randint(low=0, high=256, size=(2, 3, 640, 640)).to(torch.float32)
     (
         rough_char_mask_feature,
         rough_char_height_feature,
@@ -127,9 +127,11 @@ def test_adaptive_scaling_jit_loss_backward():
     )
     loss.backward()
 
+    rough_name_to_grad = AdaptiveScaling.debug_get_rough_name_to_grad(model_jit)  # type: ignore
+
     loss_function = AdaptiveScalingPreciseLossFunction(AdaptiveScalingPreciseLossFunctionConifg())
 
-    x = torch.rand((2, 3, 640, 640))
+    x = torch.randint(low=0, high=256, size=(2, 3, 640, 640)).to(torch.float32)
     (
         precise_char_prob_feature,
         precise_char_up_left_corner_offset_feature,
@@ -153,6 +155,11 @@ def test_adaptive_scaling_jit_loss_backward():
         char_corner_distances=torch.rand((2, 20, 3)),
     )
     loss.backward()
+
+    precise_name_to_grad = \
+        AdaptiveScaling.debug_get_precise_name_to_grad(model_jit, rough_name_to_grad)  # type: ignore # noqa
+
+    AdaptiveScaling.debug_inspect_name_to_grad(rough_name_to_grad, precise_name_to_grad)
 
 
 def sample_adaptive_scaling_dataset(

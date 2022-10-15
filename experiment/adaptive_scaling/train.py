@@ -55,6 +55,7 @@ class EpochConfig:
     dev_num_processes: int = 32
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
+    enable_multitask_gradiant_inspection: bool = False
 
 
 @attrs.define
@@ -206,16 +207,19 @@ def train(
         io.file(dataset_config.dev_adaptive_scaling_dataset_steps_json, expandvars=True),
         out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
-    dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        AdaptiveScalingIterableDatasetConfig(
-            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
-            num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
-            num_samples=dev_num_samples,
-            rng_seed=epoch_config.dev_rng_seed,
-            num_processes=epoch_config.dev_num_processes,
-            is_dev=True,
+    dev_adaptive_scaling_dataset = None
+    if not epoch_config.enable_overfit_testing \
+            and not epoch_config.enable_multitask_gradiant_inspection:
+        dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+            AdaptiveScalingIterableDatasetConfig(
+                steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+                num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
+                num_samples=dev_num_samples,
+                rng_seed=epoch_config.dev_rng_seed,
+                num_processes=epoch_config.dev_num_processes,
+                is_dev=True,
+            )
         )
-    )
 
     assert len(dataset_config.epoch_indices) \
         == len(dataset_config.train_adaptive_scaling_dataset_steps_jsons)
@@ -323,11 +327,13 @@ def train(
         epoch_idx = reset_epoch_idx_to_value
 
     # Dataloader.
-    dev_data_loader = DataLoader(
-        dev_adaptive_scaling_dataset,
-        collate_fn=adaptive_scaling_dataset_collate_fn,
-        batch_size=epoch_config.dev_batch_size,
-    )
+    dev_data_loader = None
+    if dev_adaptive_scaling_dataset is not None:
+        dev_data_loader = DataLoader(
+            dev_adaptive_scaling_dataset,
+            collate_fn=adaptive_scaling_dataset_collate_fn,
+            batch_size=epoch_config.dev_batch_size,
+        )
     train_data_loader = DataLoader(
         train_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
@@ -400,6 +406,10 @@ def train(
             del rough_batch
             del rough_loss
 
+            rough_name_to_grad = None
+            if epoch_config.enable_multitask_gradiant_inspection:
+                rough_name_to_grad = AdaptiveScaling.debug_get_rough_name_to_grad(model_jit)
+
             # Train precise prediction.
             precise_batch = batch_to_device(batch['precise'], device)
             (
@@ -433,6 +443,16 @@ def train(
             del precise_batch
             del precise_loss
 
+            precise_name_to_grad = None
+            if epoch_config.enable_multitask_gradiant_inspection:
+                assert rough_name_to_grad is not None
+                precise_name_to_grad = \
+                    AdaptiveScaling.debug_get_precise_name_to_grad(model_jit, rough_name_to_grad)
+
+                AdaptiveScaling.debug_inspect_name_to_grad(rough_name_to_grad, precise_name_to_grad)
+                del rough_name_to_grad
+                del precise_name_to_grad
+
             if optimizer_config.clip_grad_norm_max_norm is not None:
                 torch.nn.utils.clip_grad_norm_(  # type: ignore
                     model_jit.parameters(),
@@ -464,6 +484,7 @@ def train(
         dev_precise_losses: List[float] = []
         dev_losses: List[float] = []
 
+        assert dev_data_loader is not None
         for batch_idx, batch in enumerate(dev_data_loader, start=1):
             # Evaluate rough prediction.
             rough_batch = batch_to_device(batch['rough'], device)
