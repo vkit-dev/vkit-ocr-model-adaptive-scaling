@@ -46,7 +46,7 @@ class PreciseSample:
 
 @attrs.define
 class AdaptiveScalingPipelinePostProcessorConfig:
-    pass
+    enable_transform_precise_to_rough: bool = False
 
 
 @attrs.define
@@ -90,33 +90,34 @@ class AdaptiveScalingPipelinePostProcessor(
                 )
             )
 
-        cropped_page_text_regions = rng_shuffle(
-            rng,
-            page_text_region_cropping_step_output.cropped_page_text_regions,
-        )
-        assert len(cropped_page_text_regions) >= len(rough_samples)
-        num_precise_transformed_to_rough = \
-            (len(cropped_page_text_regions) + len(rough_samples)) // 2 - len(rough_samples)
+        cropped_page_text_regions = page_text_region_cropping_step_output.cropped_page_text_regions
 
-        # Some will be transformed for rough prediction.
-        for cropped_page_text_region in \
-                cropped_page_text_regions[:num_precise_transformed_to_rough]:
-            downsampled_label = cropped_page_text_region.downsampled_label
-            assert downsampled_label
-            rough_samples.append(
-                RoughSample(
-                    image=cropped_page_text_region.page_image,
-                    downsampled_shape=downsampled_label.shape,
-                    downsampled_core_box=downsampled_label.core_box,
-                    downsampled_mask=downsampled_label.page_char_mask,
-                    downsampled_score_map=downsampled_label.page_char_height_score_map,
-                    rng_state=rng_state,
+        if self.config.enable_transform_precise_to_rough:
+            cropped_page_text_regions = rng_shuffle(rng, cropped_page_text_regions)
+            assert len(cropped_page_text_regions) >= len(rough_samples)
+            num_precise_transformed_to_rough = \
+                (len(cropped_page_text_regions) + len(rough_samples)) // 2 - len(rough_samples)
+
+            # Some will be transformed for rough prediction.
+            for cropped_page_text_region in \
+                    cropped_page_text_regions[:num_precise_transformed_to_rough]:
+                downsampled_label = cropped_page_text_region.downsampled_label
+                assert downsampled_label
+                rough_samples.append(
+                    RoughSample(
+                        image=cropped_page_text_region.page_image,
+                        downsampled_shape=downsampled_label.shape,
+                        downsampled_core_box=downsampled_label.core_box,
+                        downsampled_mask=downsampled_label.page_char_mask,
+                        downsampled_score_map=downsampled_label.page_char_height_score_map,
+                        rng_state=rng_state,
+                    )
                 )
-            )
+
+            cropped_page_text_regions = cropped_page_text_regions[num_precise_transformed_to_rough:]
 
         # And the rest will be used to train precise prediction.
-        for cropped_page_text_region in \
-                cropped_page_text_regions[num_precise_transformed_to_rough:]:
+        for cropped_page_text_region in cropped_page_text_regions:
             downsampled_label = cropped_page_text_region.downsampled_label
             assert downsampled_label
             precise_samples.append(
