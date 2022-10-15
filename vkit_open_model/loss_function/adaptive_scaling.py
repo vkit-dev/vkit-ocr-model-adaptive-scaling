@@ -19,7 +19,7 @@ class AdaptiveScalingRoughLossFunctionConifg:
     dice_factor: float = 1.0
     l1_factor: float = 1.0
     downsampled_score_map_min: float = 1.1
-    scale_feature_min: float = 1.1
+    char_height_feature_min: float = 1.1
 
 
 class AdaptiveScalingRoughLossFunction:
@@ -42,7 +42,7 @@ class AdaptiveScalingRoughLossFunction:
         # Model predictions.
         # (B, 1, H, W)
         rough_char_mask_feature: torch.Tensor,
-        rough_char_scale_feature: torch.Tensor,
+        rough_char_height_feature: torch.Tensor,
         # Ground truths.
         # (B, CH, CW)
         downsampled_mask: torch.Tensor,
@@ -51,12 +51,12 @@ class AdaptiveScalingRoughLossFunction:
         downsampled_core_box: Box,
     ) -> torch.Tensor:
         # (B, 1, H, W)
-        assert rough_char_mask_feature.shape == rough_char_scale_feature.shape
+        assert rough_char_mask_feature.shape == rough_char_height_feature.shape
         assert rough_char_mask_feature.shape[1:] == (1, *downsampled_shape)
 
         # (B, H, W)
         rough_char_mask_feature = torch.squeeze(rough_char_mask_feature, dim=1)
-        rough_char_scale_feature = torch.squeeze(rough_char_scale_feature, dim=1)
+        rough_char_height_feature = torch.squeeze(rough_char_height_feature, dim=1)
 
         # (B, CH, CW)
         dc_box = downsampled_core_box
@@ -66,7 +66,7 @@ class AdaptiveScalingRoughLossFunction:
             dc_box.up:dc_box.down + 1,
             dc_box.left:dc_box.right + 1
         ]  # yapf: disable
-        rough_char_scale_feature = rough_char_scale_feature[
+        rough_char_height_feature = rough_char_height_feature[
             :,
             dc_box.up:dc_box.down + 1,
             dc_box.left:dc_box.right + 1
@@ -96,12 +96,12 @@ class AdaptiveScalingRoughLossFunction:
         # Scale.
         if self.config.l1_factor > 0.0:
             # NOTE: critical mask!
-            l1_mask = ((rough_char_scale_feature > self.config.scale_feature_min)
+            l1_mask = ((rough_char_height_feature > self.config.char_height_feature_min)
                        & (downsampled_score_map > self.config.downsampled_score_map_min)
                        & downsampled_mask.bool()).float()
-            rough_char_scale_feature = torch.clamp(
-                rough_char_scale_feature,
-                min=self.config.scale_feature_min,
+            rough_char_height_feature = torch.clamp(
+                rough_char_height_feature,
+                min=self.config.char_height_feature_min,
             )
             downsampled_score_map = torch.clamp(
                 downsampled_score_map,
@@ -109,7 +109,7 @@ class AdaptiveScalingRoughLossFunction:
             )
             # Log space + smooth L1 to model the relative scale difference.
             loss += self.config.l1_factor * self.l1(
-                pred=torch.log(rough_char_scale_feature),
+                pred=torch.log(rough_char_height_feature),
                 gt=torch.log(downsampled_score_map),
                 mask=l1_mask,
             )

@@ -28,7 +28,7 @@ class AdaptiveScalingNeckHeadType(Enum):
 class AdaptiveScalingConfig:
     size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
     neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
-    init_scale_output_bias: float = 8.0
+    init_char_height_output_bias: float = 8.0
 
 
 class AdaptiveScaling(nn.Module):
@@ -73,12 +73,12 @@ class AdaptiveScaling(nn.Module):
             out_channels=1,
             upsampling_factor=2,
         )
-        self.rough_char_scale_head = nn.Sequential(
+        self.rough_char_height_head = nn.Sequential(
             head_creator(
                 in_channels=neck_out_channels,
                 out_channels=1,
                 upsampling_factor=2,
-                init_output_bias=config.init_scale_output_bias,
+                init_output_bias=config.init_char_height_output_bias,
             ),
             # Force predicting positive value.
             nn.Softplus(),
@@ -125,9 +125,9 @@ class AdaptiveScaling(nn.Module):
 
         rough_neck_feature = self.rough_neck(feature)
         rough_char_mask_feature = self.rough_char_mask_head(rough_neck_feature)
-        rough_char_scale_feature = self.rough_char_scale_head(rough_neck_feature)
+        rough_char_height_feature = self.rough_char_height_head(rough_neck_feature)
 
-        return rough_char_mask_feature, rough_char_scale_feature
+        return rough_char_mask_feature, rough_char_height_feature
 
     @torch.jit.export  # type: ignore
     def forward_precise(

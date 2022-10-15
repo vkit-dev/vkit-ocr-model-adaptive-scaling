@@ -22,14 +22,14 @@ def visualize_rough_infer_result(
 ):
     padded_image = rough_infer_result.padded_image
     rough_char_mask = rough_infer_result.rough_char_mask
-    rough_char_scale_score_map = rough_infer_result.rough_char_scale_score_map
+    rough_char_height_score_map = rough_infer_result.rough_char_height_score_map
 
     rough_char_mask = rough_char_mask.to_resized_mask(
         resized_height=padded_image.height,
         resized_width=padded_image.width,
         cv_resize_interpolation=cv.INTER_NEAREST,
     )
-    rough_char_scale_score_map = rough_char_scale_score_map.to_resized_score_map(
+    rough_char_height_score_map = rough_char_height_score_map.to_resized_score_map(
         resized_height=padded_image.height,
         resized_width=padded_image.width,
         cv_resize_interpolation=cv.INTER_NEAREST,
@@ -40,7 +40,7 @@ def visualize_rough_infer_result(
     painter.to_file(out_fd / 'rough_mask.jpg')
 
     painter = Painter(padded_image)
-    painter.paint_score_map(rough_char_scale_score_map, alpha=1.0)
+    painter.paint_score_map(rough_char_height_score_map, alpha=1.0)
     render_image = padded_image.copy()
     render_image[rough_char_mask] = painter.image
     render_image.to_file(out_fd / 'rough_score_map.jpg')

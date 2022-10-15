@@ -34,10 +34,10 @@ def test_adaptive_scaling_jit():
     x = torch.rand((1, 3, 320, 320))
     (
         rough_char_mask_feature,
-        rough_char_scale_feature,
+        rough_char_height_feature,
     ) = model_jit.forward_rough(x)  # type: ignore
     assert rough_char_mask_feature.shape == (1, 1, 160, 160)
-    assert rough_char_scale_feature.shape == (1, 1, 160, 160)
+    assert rough_char_height_feature.shape == (1, 1, 160, 160)
 
     (
         precise_char_prob_feature,
@@ -114,12 +114,12 @@ def test_adaptive_scaling_jit_loss_backward():
     x = torch.rand((2, 3, 640, 640))
     (
         rough_char_mask_feature,
-        rough_char_scale_feature,
+        rough_char_height_feature,
     ) = model_jit.forward_rough(x)  # type: ignore
 
     loss = loss_function(
         rough_char_mask_feature=rough_char_mask_feature,
-        rough_char_scale_feature=rough_char_scale_feature,
+        rough_char_height_feature=rough_char_height_feature,
         downsampled_mask=(torch.rand(2, 300, 300) > 0.5).float(),
         downsampled_score_map=torch.rand(2, 300, 300) + 8.75,
         downsampled_shape=(320, 320),

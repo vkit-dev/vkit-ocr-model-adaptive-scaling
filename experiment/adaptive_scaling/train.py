@@ -382,12 +382,12 @@ def train(
             rough_batch = batch_to_device(batch['rough'], device)
             (
                 rough_char_mask_feature,
-                rough_char_scale_feature,
+                rough_char_height_feature,
             ) = model_jit.forward_rough(rough_batch['image'])  # type: ignore
 
             rough_loss = rough_loss_function(
                 rough_char_mask_feature=rough_char_mask_feature,
-                rough_char_scale_feature=rough_char_scale_feature,
+                rough_char_height_feature=rough_char_height_feature,
                 downsampled_mask=rough_batch['downsampled_mask'],
                 downsampled_score_map=rough_batch['downsampled_score_map'],
                 downsampled_shape=rough_batch['downsampled_shape'],
@@ -469,12 +469,12 @@ def train(
             rough_batch = batch_to_device(batch['rough'], device)
             (
                 rough_char_mask_feature,
-                rough_char_scale_feature,
+                rough_char_height_feature,
             ) = model_jit.forward_rough(rough_batch['image'])  # type: ignore
 
             rough_loss = rough_loss_function(
                 rough_char_mask_feature=rough_char_mask_feature,
-                rough_char_scale_feature=rough_char_scale_feature,
+                rough_char_height_feature=rough_char_height_feature,
                 downsampled_mask=rough_batch['downsampled_mask'],
                 downsampled_score_map=rough_batch['downsampled_score_map'],
                 downsampled_shape=rough_batch['downsampled_shape'],

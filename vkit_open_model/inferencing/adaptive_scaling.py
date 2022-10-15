@@ -42,7 +42,7 @@ class AdaptiveScalingInferencingRoughInferResult:
     resized_shape: Tuple[int, int]
     padded_image: Image
     rough_char_mask: Mask
-    rough_char_scale_score_map: ScoreMap
+    rough_char_height_score_map: ScoreMap
 
 
 @attrs.define
@@ -102,18 +102,18 @@ class AdaptiveScalingInferencing:
             # (1, 1, H / 2, D / 2)
             (
                 rough_char_mask_feature,
-                rough_char_scale_feature,
+                rough_char_height_feature,
             ) = self.model_jit.forward_rough(x)  # type: ignore
 
         # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
         rough_char_mask_feature = rough_char_mask_feature[0][0]
-        rough_char_scale_feature = rough_char_scale_feature[0][0]
+        rough_char_height_feature = rough_char_height_feature[0][0]
         # Assert shape.
-        assert rough_char_mask_feature.shape == rough_char_scale_feature.shape
+        assert rough_char_mask_feature.shape == rough_char_height_feature.shape
         assert rough_char_mask_feature.shape[0] == padded_image.height // 2
         assert rough_char_mask_feature.shape[1] == padded_image.width // 2
 
-        # Generate rough_char_mask & rough_char_scale_score_map.
+        # Generate rough_char_mask & rough_char_height_score_map.
         rough_char_mask_feature = torch.sigmoid_(rough_char_mask_feature)
         rough_char_mask_feature = torch.greater_equal(
             rough_char_mask_feature,
@@ -121,28 +121,28 @@ class AdaptiveScalingInferencing:
         )
         rough_char_mask_mat = rough_char_mask_feature.numpy().astype(np.uint8)
 
-        rough_char_scale_score_map_mat = rough_char_scale_feature.numpy().astype(np.float32)
+        rough_char_height_score_map_mat = rough_char_height_feature.numpy().astype(np.float32)
 
         # Force padding to be negative.
         if image.height < padded_image.height:
             pad_vert_begin = math.ceil(image.height / 2)
             if pad_vert_begin < rough_char_mask_mat.shape[0]:
                 rough_char_mask_mat[pad_vert_begin:] = 0
-                rough_char_scale_score_map_mat[pad_vert_begin:] = 0.0
+                rough_char_height_score_map_mat[pad_vert_begin:] = 0.0
 
         if image.width < padded_image.width:
             pad_hori_begin = math.ceil(image.width / 2)
             if pad_hori_begin < rough_char_mask_mat.shape[1]:
                 rough_char_mask_mat[:, pad_hori_begin:] = 0
-                rough_char_scale_score_map_mat[:, pad_hori_begin:] = 0.0
+                rough_char_height_score_map_mat[:, pad_hori_begin:] = 0.0
 
         # Clear char height that is too small.
-        np_invalid_mask = rough_char_scale_score_map_mat < self.config.rough_valid_char_height_min
-        rough_char_scale_score_map_mat[np_invalid_mask] = 0.0
+        np_invalid_mask = rough_char_height_score_map_mat < self.config.rough_valid_char_height_min
+        rough_char_height_score_map_mat[np_invalid_mask] = 0.0
 
         rough_char_mask = Mask(mat=rough_char_mask_mat)
-        rough_char_scale_score_map = ScoreMap(
-            mat=rough_char_scale_score_map_mat,
+        rough_char_height_score_map = ScoreMap(
+            mat=rough_char_height_score_map_mat,
             is_prob=False,
         )
 
@@ -156,7 +156,7 @@ class AdaptiveScalingInferencing:
             resized_shape=resized_shape,
             padded_image=padded_image,
             rough_char_mask=rough_char_mask,
-            rough_char_scale_score_map=rough_char_scale_score_map,
+            rough_char_height_score_map=rough_char_height_score_map,
         )
 
     def build_flattened_text_regions(
@@ -167,7 +167,7 @@ class AdaptiveScalingInferencing:
         resized_shape = rough_infer_result.resized_shape
         resized_height, _ = resized_shape
         rough_char_mask = rough_infer_result.rough_char_mask
-        rough_char_scale_score_map = rough_infer_result.rough_char_scale_score_map
+        rough_char_height_score_map = rough_infer_result.rough_char_height_score_map
 
         # Build disconnected polygons from char mask.
         rough_polygons = rough_char_mask.to_disconnected_polygons()
@@ -209,7 +209,7 @@ class AdaptiveScalingInferencing:
         inverse_resized_ratio = image.height / (resized_height * 2)
         char_height_medians: List[float] = []
         for rough_polygon in rough_polygons:
-            char_height_score_map = rough_polygon.extract_score_map(rough_char_scale_score_map)
+            char_height_score_map = rough_polygon.extract_score_map(rough_char_height_score_map)
             np_mask = (char_height_score_map.mat > 0)
             if not np_mask.any():
                 char_height_medians.append(0.0)
