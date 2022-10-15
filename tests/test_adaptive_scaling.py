@@ -145,6 +145,7 @@ def test_adaptive_scaling_jit_loss_backward():
         downsampled_char_prob_score_map=torch.rand(2, 300, 300),
         downsampled_shape=(320, 320),
         downsampled_core_box=Box(up=10, down=309, left=10, right=309),
+        downsampled_char_mask=(torch.rand(2, 300, 300) > 0.5).float(),
         downsampled_label_point_y=torch.randint(low=10, high=310, size=(2, 20)),
         downsampled_label_point_x=torch.randint(low=10, high=310, size=(2, 20)),
         char_up_left_offsets=torch.randint(low=-20, high=21, size=(2, 20, 2)),

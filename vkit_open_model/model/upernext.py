@@ -75,8 +75,9 @@ class PpmBlock(nn.Module):
 
 class UperNextNeck(nn.Module):
 
-    @staticmethod
+    @classmethod
     def build_step1_conv_blocks(
+        cls,
         in_channels_group: Sequence[int],
         ppm_scales: Sequence[int],
         inner_channels: int,
@@ -103,8 +104,9 @@ class UperNextNeck(nn.Module):
 
         return nn.ModuleList(step1_conv_blocks)
 
-    @staticmethod
+    @classmethod
     def build_step2_conv_blocks(
+        cls,
         num_step1_conv_blocks: int,
         inner_channels: int,
     ):

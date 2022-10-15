@@ -1,75 +1,121 @@
+from typing import Sequence
+from pathlib import Path
+
 import torch
-import numpy as np
 import cv2 as cv
 import iolite as io
 
-from vkit.element import Image, Mask, ScoreMap, Painter
-from vkit_open_model.evaluation import pad_mat_to_make_divisible
+from vkit.utility import dyn_structure
+from vkit.element import Image, Mask, ScoreMap, Painter  # noqa
+from vkit.pipeline.text_detection.page_text_region import FlattenedTextRegion
+from vkit_open_model.inferencing.adaptive_scaling import (
+    AdaptiveScalingInferencingConfig,
+    AdaptiveScalingInferencingRoughInferResult,
+    AdaptiveScalingInferencingPresiceInferResult,
+    AdaptiveScalingInferencing,
+)
+
+
+def visualize_rough_infer_result(
+    out_fd: Path,
+    rough_infer_result: AdaptiveScalingInferencingRoughInferResult,
+):
+    padded_image = rough_infer_result.padded_image
+    rough_char_mask = rough_infer_result.rough_char_mask
+    rough_char_scale_score_map = rough_infer_result.rough_char_scale_score_map
+
+    rough_char_mask = rough_char_mask.to_resized_mask(
+        resized_height=padded_image.height,
+        resized_width=padded_image.width,
+        cv_resize_interpolation=cv.INTER_NEAREST,
+    )
+    rough_char_scale_score_map = rough_char_scale_score_map.to_resized_score_map(
+        resized_height=padded_image.height,
+        resized_width=padded_image.width,
+        cv_resize_interpolation=cv.INTER_NEAREST,
+    )
+
+    painter = Painter(padded_image)
+    painter.paint_mask(rough_char_mask)
+    painter.to_file(out_fd / 'rough_mask.jpg')
+
+    painter = Painter(padded_image)
+    painter.paint_score_map(rough_char_scale_score_map, alpha=1.0)
+    render_image = padded_image.copy()
+    render_image[rough_char_mask] = painter.image
+    render_image.to_file(out_fd / 'rough_score_map.jpg')
+
+
+def visualize_text_regions(
+    out_fd: Path,
+    image: Image,
+    flattened_text_regions: Sequence[FlattenedTextRegion],
+    stacked_image: Image,
+):
+    polygons = [
+        flattened_text_region.text_region_polygon
+        for flattened_text_region in flattened_text_regions
+    ]
+    painter = Painter(image)
+    painter.paint_polygons(polygons)
+    painter.to_file(out_fd / 'text_region_polygons.jpg')
+
+    if False:
+        sub_out_fd = io.folder(out_fd / 'text_regions', touch=True)
+        for idx, text_region in enumerate(flattened_text_regions):
+            text_region.flattened_image.to_file(sub_out_fd / f'{idx}.jpg')
+
+    stacked_image.to_file(out_fd / 'stacked_image.jpg')
+
+
+def visualize_precise_infer_result(
+    out_fd: Path,
+    precise_infer_result: AdaptiveScalingInferencingPresiceInferResult,
+):
+    padded_image = precise_infer_result.padded_image
+    precise_char_prob_score_map = precise_infer_result.precise_char_prob_score_map
+
+    precise_char_prob_score_map = precise_char_prob_score_map.to_resized_score_map(
+        resized_height=padded_image.height,
+        resized_width=padded_image.width,
+        cv_resize_interpolation=cv.INTER_NEAREST,
+    )
+
+    painter = Painter(padded_image)
+    painter.paint_score_map(precise_char_prob_score_map)
+    painter.to_file(out_fd / 'precise_char_prob_score_map.jpg')
+
+    painter = Painter(padded_image)
+    painter.paint_mask(precise_char_prob_score_map.to_mask(0.7))
+    painter.to_file(out_fd / 'precise_char_prob_gt_70_mask.jpg')
 
 
 def infer(
-    model_jit_path: str,
+    inferencing_config_json: str,
     image_file: str,
     output_folder: str,
-    downsample_short_side_legnth: int = 640,
-    score_map_scale: float = 2.0,
 ):
-    model_jit: torch.jit.ScriptModule = torch.jit.load(model_jit_path)  # type: ignore
-    model_jit = model_jit.eval()
-    torch.set_grad_enabled(False)
-
-    image = Image.from_file(image_file).to_rgb_image()
-    if min(image.height, image.width) > downsample_short_side_legnth:
-        if image.height < image.width:
-            image = image.to_resized_image(
-                resized_height=downsample_short_side_legnth,
-                cv_resize_interpolation=cv.INTER_AREA,
-            )
-        else:
-            image = image.to_resized_image(
-                resized_width=downsample_short_side_legnth,
-                cv_resize_interpolation=cv.INTER_AREA,
-            )
-
-    mat = pad_mat_to_make_divisible(image.mat, downsampling_factor=32)
-    image = Image(mat=mat)
-
-    mat = np.transpose(mat, axes=(2, 0, 1)).astype(np.float32)
-    x = torch.from_numpy(mat).unsqueeze(0)
-    with torch.no_grad():
-        mask_feature, scale_feature = model_jit(x)  # type: ignore
-
-    mask_mat = (torch.sigmoid(mask_feature[0][0]) >= 0.5).numpy().astype(np.uint8)
-    mask = Mask(mat=mask_mat)
-    assert mask.height * 2 == image.height
-    assert mask.width * 2 == image.width
-    mask = mask.to_resized_mask(
-        resized_height=image.height,
-        resized_width=image.width,
-        cv_resize_interpolation=cv.INTER_NEAREST,
-    )
-
-    score_map_mat = scale_feature[0][0].numpy().astype(np.float32) * score_map_scale
-    score_map = ScoreMap(mat=score_map_mat, is_prob=False)
-    assert score_map.height * 2 == image.height
-    assert score_map.width * 2 == image.width
-    score_map = score_map.to_resized_score_map(
-        resized_height=image.height,
-        resized_width=image.width,
-        cv_resize_interpolation=cv.INTER_NEAREST,
-    )
-
     out_fd = io.folder(output_folder, touch=True)
-    painter = Painter(image.copy())
-    painter.paint_mask(mask)
-    painter.to_file(out_fd / 'mask.png')
 
-    painter = Painter.create(image.shape)
-    painter.paint_score_map(score_map, alpha=1.0)
-    layer_image = painter.image.copy()
-    render_image = image.copy()
-    render_image[mask] = layer_image
-    render_image.to_file(out_fd / 'score_map.png')
+    inferencing_config = dyn_structure(
+        inferencing_config_json,
+        AdaptiveScalingInferencingConfig,
+        support_path_type=True,
+    )
+    inferencing = AdaptiveScalingInferencing(inferencing_config)
+
+    image = Image.from_file(image_file)
+
+    rough_infer_result = inferencing.rough_infer(image)
+    visualize_rough_infer_result(out_fd, rough_infer_result)
+
+    flattened_text_regions = inferencing.build_flattened_text_regions(image, rough_infer_result)
+    stacked_image, stacked_boxes = inferencing.stack_flattened_text_regions(flattened_text_regions)
+    assert stacked_boxes  # TODO
+    visualize_text_regions(out_fd, image, flattened_text_regions, stacked_image)
+
+    precise_infer_result = inferencing.precise_infer(stacked_image)
+    visualize_precise_infer_result(out_fd, precise_infer_result)
 
 
 def convert_model_jit_to_model_onnx(

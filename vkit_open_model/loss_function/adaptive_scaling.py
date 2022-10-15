@@ -120,7 +120,7 @@ class AdaptiveScalingRoughLossFunction:
 
 @attrs.define
 class AdaptiveScalingPreciseLossFunctionConifg:
-    char_prob_l1_factor: float = 3.0
+    char_prob_l1_factor: float = 5.0
     char_up_left_offset_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
     char_corner_distance_l1_factor: float = 1.0
@@ -140,8 +140,9 @@ class AdaptiveScalingPreciseLossFunction:
         # Corner distance.
         self.char_corner_distance_l1 = L1LossFunction(smooth=True, smooth_beta=5.0)
 
-    @staticmethod
+    @classmethod
     def get_label_point_feature(
+        cls,
         # (B, *, H, W)
         feature: torch.Tensor,
         # (B, P)

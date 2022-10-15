@@ -39,8 +39,9 @@ def build_conv5x5_block(in_channels: int, out_channels: int):
 
 class FpnNeck(nn.Module):
 
-    @staticmethod
+    @classmethod
     def build_step1_conv_blocks(
+        cls,
         in_channels_group: Sequence[int],
         out_channels: int,
     ):
@@ -54,8 +55,9 @@ class FpnNeck(nn.Module):
             )
         return nn.ModuleList(step1_conv_blocks)
 
-    @staticmethod
+    @classmethod
     def build_step2_conv_blocks(
+        cls,
         in_channels_group: Sequence[int],
         out_channels: int,
     ):

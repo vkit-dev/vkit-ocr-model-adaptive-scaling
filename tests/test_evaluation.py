@@ -1,4 +1,4 @@
-from vkit_open_model.evaluation.opt import pad_length_to_make_divisible
+from vkit_open_model.inferencing.opt import pad_length_to_make_divisible
 
 
 def test_pad_length_to_make_divisible():
