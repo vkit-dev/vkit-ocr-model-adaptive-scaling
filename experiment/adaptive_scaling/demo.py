@@ -15,9 +15,10 @@ from pathlib import Path
 import torch
 import cv2 as cv
 import iolite as io
+import numpy as np
 
 from vkit.utility import dyn_structure
-from vkit.element import Image, Mask, ScoreMap, Painter  # noqa
+from vkit.element import Point, PointList, Image, Mask, ScoreMap, Painter  # noqa
 from vkit.pipeline.text_detection.page_text_region import FlattenedTextRegion
 from vkit_open_model.inferencing.adaptive_scaling import (
     AdaptiveScalingInferencingConfig,
@@ -99,6 +100,35 @@ def visualize_precise_infer_result(
     painter = Painter(padded_image)
     painter.paint_mask(precise_char_prob_score_map.to_mask(0.7))
     painter.to_file(out_fd / 'precise_char_prob_gt_70_mask.jpg')
+
+    # Simple method to reconstruct polygon.
+    precise_char_prob_score_map = precise_infer_result.precise_char_prob_score_map
+    char_active_mask = precise_char_prob_score_map.to_mask(0.7)
+
+    char_active_points = PointList()
+    for char_active_polygon in char_active_mask.to_disconnected_polygons():
+        score_map = char_active_polygon.extract_score_map(precise_char_prob_score_map)
+        y, x = np.unravel_index(np.argmax(score_map.mat), score_map.shape)
+        point_y = char_active_polygon.bounding_box.up + int(y)
+        point_x = char_active_polygon.bounding_box.left + int(x)
+        char_active_points.append(Point.create(y=point_y, x=point_x))
+
+    upsampled_char_active_points = char_active_points.to_conducted_resized_points(
+        char_active_mask.shape,
+        resized_height=padded_image.height,
+        resized_width=padded_image.width,
+    )
+    painter = Painter(padded_image)
+    painter.paint_points(upsampled_char_active_points, radius=3, color='red', alpha=0.9)
+    painter.to_file(out_fd / 'precise_simple_char_active_points.jpg')
+
+    upsampled_char_polygons = [
+        AdaptiveScalingInferencing.precise_build_polygon(precise_infer_result, point)
+        for point in char_active_points
+    ]
+    painter = Painter(padded_image)
+    painter.paint_polygons(upsampled_char_polygons)
+    painter.to_file(out_fd / 'precise_simple_char_polygons.jpg')
 
 
 def infer(

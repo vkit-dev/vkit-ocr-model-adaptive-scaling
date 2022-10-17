@@ -20,7 +20,7 @@ import iolite as io
 import attrs
 
 from vkit.utility import PathType
-from vkit.element import Polygon, Mask, ScoreMap, Image
+from vkit.element import Point, Polygon, Mask, ScoreMap, Image
 from vkit.pipeline.text_detection.page_text_region import (
     stack_flattened_text_regions,
     FlattenedTextRegion,
@@ -60,9 +60,9 @@ class AdaptiveScalingInferencingRoughInferResult:
 class AdaptiveScalingInferencingPresiceInferResult:
     padded_image: Image
     precise_char_prob_score_map: ScoreMap
-    precise_char_up_left_corner_offset_score_map: ScoreMap
-    precise_char_corner_angle_score_map: ScoreMap
-    precise_char_corner_distance_score_map: ScoreMap
+    precise_np_char_up_left_corner_offset: np.ndarray
+    precise_np_char_corner_angle_distribution: np.ndarray
+    precise_np_char_corner_distance: np.ndarray
 
 
 class AdaptiveScalingInferencing:
@@ -293,12 +293,24 @@ class AdaptiveScalingInferencing:
                 precise_char_corner_angle_feature,
                 precise_char_corner_distance_feature,
             ) = self.model_jit.forward_precise(x)  # type: ignore
+
         # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
         precise_char_prob_feature = precise_char_prob_feature[0][0]
+
+        # (1, 2, H / 2, D / 2)) -> (H / 2, D / 2, 2))
         precise_char_up_left_corner_offset_feature = \
-            precise_char_up_left_corner_offset_feature[0][0]
-        precise_char_corner_angle_feature = precise_char_corner_angle_feature[0][0]
-        precise_char_corner_distance_feature = precise_char_corner_distance_feature[0][0]
+            torch.permute(precise_char_up_left_corner_offset_feature[0], [1, 2, 0])
+        assert precise_char_up_left_corner_offset_feature.shape[-1] == 2
+
+        # (1, 4, H / 2, D / 2)) -> (H / 2, D / 2, 4))
+        precise_char_corner_angle_feature = \
+            torch.permute(precise_char_corner_angle_feature[0], [1, 2, 0])
+        assert precise_char_corner_angle_feature.shape[-1] == 4
+
+        # (1, 3, H / 2, D / 2)) -> (H / 2, D / 2, 3))
+        precise_char_corner_distance_feature = \
+            torch.permute(precise_char_corner_distance_feature[0], [1, 2, 0])
+        assert precise_char_corner_distance_feature.shape[-1] == 3
 
         # Generate precise_char_prob_score_map.
         precise_char_prob_feature = torch.sigmoid_(precise_char_prob_feature)
@@ -317,26 +329,91 @@ class AdaptiveScalingInferencing:
 
         precise_char_prob_score_map = ScoreMap(mat=precise_char_prob_score_map_mat)
 
-        # Generate other score maps.
-        precise_char_up_left_corner_offset_score_map = ScoreMap(
-            mat=precise_char_up_left_corner_offset_feature.numpy().astype(np.float32),
-            is_prob=False,
-        )
-        precise_char_corner_angle_score_map = ScoreMap(
-            mat=precise_char_corner_angle_feature.numpy().astype(np.float32),
-            is_prob=False,
-        )
-        precise_char_corner_distance_score_map = ScoreMap(
-            mat=precise_char_corner_distance_feature.numpy().astype(np.float32),
-            is_prob=False,
-        )
+        # Generate other np arrays.
+        precise_np_char_up_left_corner_offset = \
+            precise_char_up_left_corner_offset_feature.numpy().astype(np.float32)
+
+        precise_char_corner_angle_feature = \
+            torch.softmax(precise_char_corner_angle_feature, axis=-1)  # type: ignore
+        precise_np_char_corner_angle_distribution = \
+            precise_char_corner_angle_feature.numpy().astype(np.float32)
+
+        precise_np_char_corner_distance = \
+            precise_char_corner_distance_feature.numpy().astype(np.float32)
 
         return AdaptiveScalingInferencingPresiceInferResult(
             padded_image=padded_image,
             precise_char_prob_score_map=precise_char_prob_score_map,
-            precise_char_up_left_corner_offset_score_map=(
-                precise_char_up_left_corner_offset_score_map
-            ),
-            precise_char_corner_angle_score_map=precise_char_corner_angle_score_map,
-            precise_char_corner_distance_score_map=precise_char_corner_distance_score_map,
+            precise_np_char_up_left_corner_offset=precise_np_char_up_left_corner_offset,
+            precise_np_char_corner_angle_distribution=precise_np_char_corner_angle_distribution,
+            precise_np_char_corner_distance=precise_np_char_corner_distance,
         )
+
+    @classmethod
+    def precise_build_polygon(
+        cls,
+        precise_infer_result: AdaptiveScalingInferencingPresiceInferResult,
+        point: Point,
+    ):
+        padded_image = precise_infer_result.padded_image
+        precise_np_char_up_left_corner_offset = \
+            precise_infer_result.precise_np_char_up_left_corner_offset
+        precise_np_char_corner_angle_distribution = \
+            precise_infer_result.precise_np_char_corner_angle_distribution
+        precise_np_char_corner_distance = \
+            precise_infer_result.precise_np_char_corner_distance
+
+        # NOTE: point is in downsampled space.
+        upsampled_point = point.to_conducted_resized_point(
+            precise_np_char_up_left_corner_offset.shape[:2],
+            resized_height=padded_image.height,
+            resized_width=padded_image.width,
+        )
+
+        # Locate up-left corner.
+        (
+            up_left_offset_y,
+            up_left_offset_x,
+        ) = precise_np_char_up_left_corner_offset[point.y][point.x]
+
+        up_left = Point.create(
+            y=upsampled_point.smooth_y + up_left_offset_y,
+            x=upsampled_point.smooth_x + up_left_offset_x,
+        )
+
+        # Get angles.
+        angle_distrib = precise_np_char_corner_angle_distribution[point.y][point.x]
+        assert len(angle_distrib) == 4
+
+        # Get other corner distances.
+        other_corner_distances = precise_np_char_corner_distance[point.y][point.x]
+        assert len(other_corner_distances) == 3
+        up_right_dis, down_right_dis, down_left_dis = other_corner_distances
+
+        # Build other corner points.
+        theta = np.arctan2(up_left_offset_y, up_left_offset_x)
+        two_pi = 2 * np.pi
+        theta = theta % two_pi
+
+        theta += angle_distrib[0] * two_pi
+        theta = theta % two_pi
+        up_right = Point.create(
+            y=upsampled_point.smooth_y + np.sin(theta) * up_right_dis,
+            x=upsampled_point.smooth_x + np.cos(theta) * up_right_dis,
+        )
+
+        theta += angle_distrib[1] * two_pi
+        theta = theta % two_pi
+        down_right = Point.create(
+            y=upsampled_point.smooth_y + np.sin(theta) * down_right_dis,
+            x=upsampled_point.smooth_x + np.cos(theta) * down_right_dis,
+        )
+
+        theta += angle_distrib[2] * two_pi
+        theta = theta % two_pi
+        down_left = Point.create(
+            y=upsampled_point.smooth_y + np.sin(theta) * down_left_dis,
+            x=upsampled_point.smooth_x + np.cos(theta) * down_left_dis,
+        )
+
+        return Polygon.create([up_left, up_right, down_right, down_left])
