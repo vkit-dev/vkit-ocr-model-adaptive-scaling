@@ -74,8 +74,20 @@ def visualize_text_regions(
 
     if False:
         sub_out_fd = io.folder(out_fd / 'text_regions', touch=True)
-        for idx, text_region in enumerate(flattened_text_regions):
-            text_region.flattened_image.to_file(sub_out_fd / f'{idx}.jpg')
+        for idx, flattened_text_region in enumerate(flattened_text_regions):
+            flattened_text_region.text_region_image.to_file(sub_out_fd / f'{idx}-original.jpg')
+            io.write_json(
+                sub_out_fd / f'{idx}-original.json',
+                flattened_text_region.text_region_polygon.to_xy_pairs(),
+                indent=2,
+            )
+            painter = Painter(image)
+            painter.paint_polygons(
+                [flattened_text_region.text_region_polygon],
+                color='red',
+            )
+            painter.to_file(sub_out_fd / f'{idx}-original-full.jpg')
+            flattened_text_region.flattened_image.to_file(sub_out_fd / f'{idx}.jpg')
 
     stacked_image.to_file(out_fd / 'stacked_image.jpg')
 
