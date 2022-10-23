@@ -104,7 +104,12 @@ class AdaptiveScaling(nn.Module):
             out_channels=neck_out_channels,
         )
 
-        # 4 heads, 2x upsampling, leading to 2x E2E downsampling.
+        # 5 heads, 2x upsampling, leading to 2x E2E downsampling.
+        self.precise_char_mask_head = head_creator(
+            in_channels=neck_out_channels,
+            out_channels=1,
+            upsampling_factor=2,
+        )
         self.precise_char_prob_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=1,
@@ -147,10 +152,12 @@ class AdaptiveScaling(nn.Module):
     def forward_precise(
         self,
         x: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:  # type: ignore
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+               torch.Tensor]:  # type: ignore
         feature = self.backbone(x)
 
         precise_neck_feature = self.precise_neck(feature)
+        precise_char_mask_feature = self.precise_char_mask_head(precise_neck_feature)
         precise_char_prob_feature = self.precise_char_prob_head(precise_neck_feature)
         precise_char_up_left_corner_offset_feature = \
             self.precise_char_up_left_corner_offset_head(precise_neck_feature)
@@ -160,6 +167,7 @@ class AdaptiveScaling(nn.Module):
             self.precise_char_corner_distance_head(precise_neck_feature)
 
         return (
+            precise_char_mask_feature,
             precise_char_prob_feature,
             precise_char_up_left_corner_offset_feature,
             precise_char_corner_angle_feature,

@@ -424,6 +424,7 @@ def train(
             # Train precise prediction.
             precise_batch = batch_to_device(batch['precise'], device)
             (
+                precise_char_mask_feature,
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
                 precise_char_corner_angle_feature,
@@ -431,6 +432,7 @@ def train(
             ) = model_jit.forward_precise(precise_batch['image'])  # type: ignore
 
             precise_loss = precise_loss_function(
+                precise_char_mask_feature=precise_char_mask_feature,
                 precise_char_prob_feature=precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature=(
                     precise_char_up_left_corner_offset_feature
@@ -521,6 +523,7 @@ def train(
             # Evaluate precise prediction.
             precise_batch = batch_to_device(batch['precise'], device)
             (
+                precise_char_mask_feature,
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
                 precise_char_corner_angle_feature,
@@ -528,6 +531,7 @@ def train(
             ) = model_jit.forward_precise(precise_batch['image'])  # type: ignore
 
             precise_loss = precise_loss_function(
+                precise_char_mask_feature=precise_char_mask_feature,
                 precise_char_prob_feature=precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature=(
                     precise_char_up_left_corner_offset_feature

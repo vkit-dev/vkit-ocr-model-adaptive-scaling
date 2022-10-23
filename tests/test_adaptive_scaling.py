@@ -144,6 +144,7 @@ def test_adaptive_scaling_jit_loss_backward():
 
     x = torch.randint(low=0, high=256, size=(2, 3, 640, 640)).to(torch.float32)
     (
+        precise_char_mask_feature,
         precise_char_prob_feature,
         precise_char_up_left_corner_offset_feature,
         precise_char_corner_angle_feature,
@@ -151,6 +152,7 @@ def test_adaptive_scaling_jit_loss_backward():
     ) = model_jit.forward_precise(x)  # type: ignore
 
     loss = loss_function(
+        precise_char_mask_feature=precise_char_mask_feature,
         precise_char_prob_feature=precise_char_prob_feature,
         precise_char_up_left_corner_offset_feature=precise_char_up_left_corner_offset_feature,
         precise_char_corner_angle_feature=precise_char_corner_angle_feature,

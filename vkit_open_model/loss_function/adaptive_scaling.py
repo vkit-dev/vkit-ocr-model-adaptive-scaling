@@ -131,6 +131,7 @@ class AdaptiveScalingRoughLossFunction:
 
 @attrs.define
 class AdaptiveScalingPreciseLossFunctionConifg:
+    char_mask_focal_factor: float = 6.666666666666667
     char_prob_l1_factor: float = 5.0
     char_up_left_offset_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
@@ -143,6 +144,8 @@ class AdaptiveScalingPreciseLossFunction:
     def __init__(self, config: AdaptiveScalingPreciseLossFunctionConifg):
         self.config = config
 
+        # Mask.
+        self.char_mask_focal_with_logits = FocalWithLogitsLossFunction()
         # Prob.
         self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.25)
         # Up-left corner.
@@ -170,6 +173,7 @@ class AdaptiveScalingPreciseLossFunction:
         self,
         # Model predictions.
         # (B, 1, H, W)
+        precise_char_mask_feature: torch.Tensor,
         precise_char_prob_feature: torch.Tensor,
         # (B, 2, H, W)
         precise_char_up_left_corner_offset_feature: torch.Tensor,
@@ -196,10 +200,18 @@ class AdaptiveScalingPreciseLossFunction:
     ) -> torch.Tensor:
         # Prob.
         # (B, H, W)
+        assert precise_char_mask_feature.shape == precise_char_prob_feature.shape
         assert precise_char_prob_feature.shape[1:] == (1, *downsampled_shape)
+
+        precise_char_mask_feature = torch.squeeze(precise_char_mask_feature, dim=1)
         precise_char_prob_feature = torch.squeeze(precise_char_prob_feature, dim=1)
 
         # (B, CH, CW)
+        precise_char_mask_feature = precise_char_mask_feature[
+            :,
+            downsampled_core_box.up:downsampled_core_box.down + 1,
+            downsampled_core_box.left:downsampled_core_box.right + 1
+        ]  # yapf: disable
         precise_char_prob_feature = precise_char_prob_feature[
             :,
             downsampled_core_box.up:downsampled_core_box.down + 1,
@@ -235,6 +247,12 @@ class AdaptiveScalingPreciseLossFunction:
         )
 
         loss = 0.0
+
+        if self.config.char_mask_focal_factor > 0:
+            loss += self.config.char_mask_focal_factor * self.char_mask_focal_with_logits(
+                pred=precise_char_mask_feature,
+                gt=downsampled_char_mask,
+            )
 
         if self.config.char_prob_l1_factor > 0:
             loss += self.config.char_prob_l1_factor * self.char_prob_l1(
