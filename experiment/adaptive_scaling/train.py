@@ -56,8 +56,8 @@ class EpochConfig:
     torch_seed: int = 133
     num_epochs: int = 156
     num_page_char_regression_labels: int = 200
-    train_num_batches: int = 1008
-    train_batch_size: int = 6
+    train_num_batches: int = 1200
+    train_batch_size: int = 5
     train_rng_seed: int = 13371
     train_num_processes: int = 10
     dev_num_batches: int = 70
