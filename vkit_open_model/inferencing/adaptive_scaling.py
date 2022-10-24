@@ -46,6 +46,7 @@ class AdaptiveScalingInferencingConfig:
     precise_flattened_text_region_resized_ratio_min: float = 0.25
     precise_stack_flattened_text_regions_page_pad: int = 10
     precise_stack_flattened_text_regions_pad: int = 2
+    precise_char_mask_positive_thr: float = 0.5
 
 
 @attrs.define
@@ -59,6 +60,7 @@ class AdaptiveScalingInferencingRoughInferResult:
 @attrs.define
 class AdaptiveScalingInferencingPresiceInferResult:
     padded_image: Image
+    precise_char_mask: Mask
     precise_char_prob_score_map: ScoreMap
     precise_np_char_up_left_corner_offset: np.ndarray
     precise_np_char_corner_angle_distribution: np.ndarray
@@ -288,6 +290,7 @@ class AdaptiveScalingInferencing:
         with torch.no_grad():
             # (1, 1, H / 2, D / 2)
             (
+                precise_char_mask_feature,
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
                 precise_char_corner_angle_feature,
@@ -295,6 +298,7 @@ class AdaptiveScalingInferencing:
             ) = self.model_jit.forward_precise(x)  # type: ignore
 
         # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
+        precise_char_mask_feature = precise_char_mask_feature[0][0]
         precise_char_prob_feature = precise_char_prob_feature[0][0]
 
         # (1, 2, H / 2, D / 2)) -> (H / 2, D / 2, 2))
@@ -312,6 +316,14 @@ class AdaptiveScalingInferencing:
             torch.permute(precise_char_corner_distance_feature[0], [1, 2, 0])
         assert precise_char_corner_distance_feature.shape[-1] == 3
 
+        # Generate precise_char_mask.
+        precise_char_mask_feature = torch.sigmoid_(precise_char_mask_feature)
+        precise_char_mask_feature = torch.greater_equal(
+            precise_char_mask_feature,
+            self.config.precise_char_mask_positive_thr,
+        )
+        precise_char_mask_mat = precise_char_mask_feature.numpy().astype(np.uint8)
+
         # Generate precise_char_prob_score_map.
         precise_char_prob_feature = torch.sigmoid_(precise_char_prob_feature)
         precise_char_prob_score_map_mat = precise_char_prob_feature.numpy().astype(np.float32)
@@ -320,13 +332,16 @@ class AdaptiveScalingInferencing:
         if image.height < padded_image.height:
             pad_vert_begin = math.ceil(image.height / 2)
             if pad_vert_begin < precise_char_prob_score_map_mat.shape[0]:
+                precise_char_mask_mat[pad_vert_begin:] = 0
                 precise_char_prob_score_map_mat[pad_vert_begin:] = 0.0
 
         if image.width < padded_image.width:
             pad_hori_begin = math.ceil(image.width / 2)
             if pad_hori_begin < precise_char_prob_score_map_mat.shape[1]:
+                precise_char_mask_mat[:, pad_hori_begin:] = 0
                 precise_char_prob_score_map_mat[:, pad_hori_begin:] = 0.0
 
+        precise_char_mask = Mask(mat=precise_char_mask_mat)
         precise_char_prob_score_map = ScoreMap(mat=precise_char_prob_score_map_mat)
 
         # Generate other np arrays.
@@ -343,6 +358,7 @@ class AdaptiveScalingInferencing:
 
         return AdaptiveScalingInferencingPresiceInferResult(
             padded_image=padded_image,
+            precise_char_mask=precise_char_mask,
             precise_char_prob_score_map=precise_char_prob_score_map,
             precise_np_char_up_left_corner_offset=precise_np_char_up_left_corner_offset,
             precise_np_char_corner_angle_distribution=precise_np_char_corner_angle_distribution,

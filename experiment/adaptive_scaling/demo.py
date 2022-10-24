@@ -97,25 +97,35 @@ def visualize_precise_infer_result(
     precise_infer_result: AdaptiveScalingInferencingPresiceInferResult,
 ):
     padded_image = precise_infer_result.padded_image
+    precise_char_mask = precise_infer_result.precise_char_mask
     precise_char_prob_score_map = precise_infer_result.precise_char_prob_score_map
 
-    precise_char_prob_score_map = precise_char_prob_score_map.to_resized_score_map(
+    resized_precise_char_mask = precise_char_mask.to_resized_mask(
+        resized_height=padded_image.height,
+        resized_width=padded_image.width,
+        cv_resize_interpolation=cv.INTER_NEAREST,
+    )
+    resized_precise_char_prob_score_map = precise_char_prob_score_map.to_resized_score_map(
         resized_height=padded_image.height,
         resized_width=padded_image.width,
         cv_resize_interpolation=cv.INTER_NEAREST,
     )
 
     painter = Painter(padded_image)
-    painter.paint_score_map(precise_char_prob_score_map)
+    painter.paint_mask(resized_precise_char_mask)
+    painter.to_file(out_fd / 'precise_char_mask.jpg')
+
+    painter = Painter(padded_image)
+    painter.paint_score_map(resized_precise_char_prob_score_map)
     painter.to_file(out_fd / 'precise_char_prob_score_map.jpg')
 
     painter = Painter(padded_image)
-    painter.paint_mask(precise_char_prob_score_map.to_mask(0.7))
+    painter.paint_mask(resized_precise_char_prob_score_map.to_mask(0.7))
     painter.to_file(out_fd / 'precise_char_prob_gt_70_mask.jpg')
 
     # Simple method to reconstruct polygon.
-    precise_char_prob_score_map = precise_infer_result.precise_char_prob_score_map
     char_active_mask = precise_char_prob_score_map.to_mask(0.7)
+    precise_char_mask.to_inverted_mask().fill_mask(char_active_mask, 0)
 
     char_active_points = PointList()
     for char_active_polygon in char_active_mask.to_disconnected_polygons():
