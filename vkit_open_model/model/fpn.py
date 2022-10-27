@@ -1,3 +1,14 @@
+# This project (vkit-x/vkit-open-model) is dual-licensed under commercial and SSPL licenses.
+#
+# The commercial license gives you the full rights to create and distribute software
+# on your own terms without any SSPL license obligations. For more information,
+# please see the "LICENSE_COMMERCIAL.txt" file.
+#
+# This project is also available under Server Side Public License (SSPL).
+# The SSPL licensing is ideal for use cases such as open source projects with
+# SSPL distribution, student/academic purposes, hobby projects, internal research
+# projects without external distribution, or other projects where all SSPL
+# obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 from typing import Sequence, Tuple, List
 
 import torch
@@ -27,10 +38,21 @@ def build_conv3x3_block(in_channels: int, out_channels: int):
     )
 
 
+def build_conv5x5_block(in_channels: int, out_channels: int):
+    return nn.Sequential(
+        helper.conv5x5(in_channels=in_channels, out_channels=out_channels),
+        helper.permute_bchw_to_bhwc(),
+        helper.ln(in_channels=out_channels),
+        helper.permute_bhwc_to_bchw(),
+        helper.gelu(),
+    )
+
+
 class FpnNeck(nn.Module):
 
-    @staticmethod
+    @classmethod
     def build_step1_conv_blocks(
+        cls,
         in_channels_group: Sequence[int],
         out_channels: int,
     ):
@@ -44,8 +66,9 @@ class FpnNeck(nn.Module):
             )
         return nn.ModuleList(step1_conv_blocks)
 
-    @staticmethod
+    @classmethod
     def build_step2_conv_blocks(
+        cls,
         in_channels_group: Sequence[int],
         out_channels: int,
     ):
@@ -137,11 +160,23 @@ class FpnHead(nn.Module):
         self.upsampling_factor = upsampling_factor
 
         inner_channels = (in_channels + out_channels) // 2
-        self.step1_conv3x3 = build_conv3x3_block(
-            in_channels=in_channels,
-            out_channels=inner_channels,
-        )
-        self.step2_conv1x1 = nn.Sequential(
+
+        # Smoothing.
+        if 1 <= self.upsampling_factor <= 2:
+            self.step1_conv = build_conv3x3_block(
+                in_channels=in_channels,
+                out_channels=inner_channels,
+            )
+        elif 2 < self.upsampling_factor <= 4:
+            self.step1_conv = build_conv5x5_block(
+                in_channels=in_channels,
+                out_channels=inner_channels,
+            )
+        else:
+            raise NotImplementedError()
+
+        # Projection.
+        self.step2_conv = nn.Sequential(
             helper.permute_bchw_to_bhwc(),
             helper.conv1x1(in_channels=inner_channels, out_channels=out_channels),
             helper.permute_bhwc_to_bchw(),
@@ -153,7 +188,7 @@ class FpnHead(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-        nn.init.constant_(self.step2_conv1x1[1].bias, init_output_bias)  # type: ignore
+        nn.init.constant_(self.step2_conv[1].bias, init_output_bias)  # type: ignore
 
     def forward(self, fpn_neck_feature: torch.Tensor) -> torch.Tensor:  # type: ignore
         x = fpn_neck_feature
@@ -168,6 +203,6 @@ class FpnHead(nn.Module):
                 mode='nearest',
             )
 
-        x = self.step1_conv3x3(x)
-        x = self.step2_conv1x1(x)
+        x = self.step1_conv(x)
+        x = self.step2_conv(x)
         return x

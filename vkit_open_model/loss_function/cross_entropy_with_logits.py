@@ -9,12 +9,11 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-from .metrics import Metrics
-from .opt import (
-    batch_to_device,
-    device_is_cuda,
-    enable_cudnn_benchmark,
-    enable_cudnn_deterministic,
-    setup_seeds,
-    calculate_iterable_dataset_num_samples,
-)
+import torch
+from torch.nn import functional as F
+
+
+class CrossEntropyWithLogitsLossFunction:
+
+    def __call__(self, pred: torch.Tensor, gt: torch.Tensor):
+        return F.cross_entropy(pred, gt)

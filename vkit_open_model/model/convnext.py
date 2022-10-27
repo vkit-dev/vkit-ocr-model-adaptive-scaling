@@ -1,3 +1,14 @@
+# This project (vkit-x/vkit-open-model) is dual-licensed under commercial and SSPL licenses.
+#
+# The commercial license gives you the full rights to create and distribute software
+# on your own terms without any SSPL license obligations. For more information,
+# please see the "LICENSE_COMMERCIAL.txt" file.
+#
+# This project is also available under Server Side Public License (SSPL).
+# The SSPL licensing is ideal for use cases such as open source projects with
+# SSPL distribution, student/academic purposes, hobby projects, internal research
+# projects without external distribution, or other projects where all SSPL
+# obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 from typing import Sequence, Tuple, List, Optional
 
 import torch
@@ -92,8 +103,9 @@ class ConvNextBlock(nn.Module):
 
 class ConvNext(nn.Module):
 
-    @staticmethod
+    @classmethod
     def build_stem(
+        cls,
         stem_in_channels: int,
         block_in_channels: int,
         use_pconv2x2: bool,
@@ -110,8 +122,11 @@ class ConvNext(nn.Module):
             helper.permute_bhwc_to_bchw(),
         )
 
-    @staticmethod
-    def build_blocks(block_in_channels_and_num_layers: Sequence[Tuple[int, int]]):
+    @classmethod
+    def build_blocks(
+        cls,
+        block_in_channels_and_num_layers: Sequence[Tuple[int, int]],
+    ):
         num_layers_sum = sum(num_layers for _, num_layers in block_in_channels_and_num_layers)
         layer_idx_begin = 0
         layer_idx_end = num_layers_sum - 1
@@ -157,8 +172,8 @@ class ConvNext(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    @staticmethod
-    def create_tiny(stem_use_pconv2x2: bool = False):
+    @classmethod
+    def create_tiny(cls, stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -170,8 +185,8 @@ class ConvNext(nn.Module):
             stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
-    @staticmethod
-    def create_small(stem_use_pconv2x2: bool = False):
+    @classmethod
+    def create_small(cls, stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -183,8 +198,8 @@ class ConvNext(nn.Module):
             stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
-    @staticmethod
-    def create_base(stem_use_pconv2x2: bool = False):
+    @classmethod
+    def create_base(cls, stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(
@@ -196,8 +211,8 @@ class ConvNext(nn.Module):
             stem_use_pconv2x2=stem_use_pconv2x2,
         )
 
-    @staticmethod
-    def create_large(stem_use_pconv2x2: bool = False):
+    @classmethod
+    def create_large(cls, stem_use_pconv2x2: bool = False):
         return ConvNext(
             stem_in_channels=3,
             block_in_channels_and_num_layers=(

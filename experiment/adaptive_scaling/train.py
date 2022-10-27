@@ -1,3 +1,14 @@
+# This project (vkit-x/vkit-open-model) is dual-licensed under commercial and SSPL licenses.
+#
+# The commercial license gives you the full rights to create and distribute software
+# on your own terms without any SSPL license obligations. For more information,
+# please see the "LICENSE_COMMERCIAL.txt" file.
+#
+# This project is also available under Server Side Public License (SSPL).
+# The SSPL licensing is ideal for use cases such as open source projects with
+# SSPL distribution, student/academic purposes, hobby projects, internal research
+# projects without external distribution, or other projects where all SSPL
+# obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 from typing import Tuple, Mapping, Optional, List, Sequence
 import itertools
 from enum import Enum, unique
@@ -23,12 +34,13 @@ from vkit_open_model.dataset import (
     AdaptiveScalingIterableDataset,
 )
 from vkit_open_model.loss_function import (
-    AdaptiveScalingLossFunctionConifg,
-    AdaptiveScalingLossFunction,
+    AdaptiveScalingRoughLossFunctionConifg,
+    AdaptiveScalingRoughLossFunction,
+    AdaptiveScalingPreciseLossFunctionConifg,
+    AdaptiveScalingPreciseLossFunction,
 )
 from vkit_open_model.training import (
     batch_to_device,
-    # device_is_cuda,
     enable_cudnn_benchmark,
     enable_cudnn_deterministic,
     setup_seeds,
@@ -42,34 +54,38 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     torch_seed: int = 133
-    num_epochs: int = 210
-    train_num_batches: int = 672
-    train_batch_size: int = 7
+    num_epochs: int = 156
+    num_page_char_regression_labels: int = 200
+    train_num_batches: int = 1200
+    train_batch_size: int = 5
     train_rng_seed: int = 13371
-    train_num_processes: int = 16
-    dev_num_batches: int = 68
-    dev_batch_size: int = 32
+    train_num_processes: int = 10
+    dev_num_batches: int = 70
+    dev_batch_size: int = 22
     dev_rng_seed: int = 13
     dev_num_processes: int = 32
     avg_num_batches: int = 50
     enable_overfit_testing: bool = False
+    enable_multitask_gradiant_inspection: bool = False
 
 
 @attrs.define
 class OptimizerConfig:
-    adamw_lr: float = 1E-3
+    adamw_lr: float = 8E-4
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
-    cosine_annealing_warm_restarts_t0: int = 14
-    cosine_annealing_warm_restarts_tmulti: int = 2
-    cosine_annealing_warm_restarts_eta_min: float = 1E-5
-    clip_grad_norm_max_norm: Optional[float] = None
+    cosine_annealing_warm_restarts_t0: int = 12
+    cosine_annealing_warm_restarts_tmulti: int = 3
+    cosine_annealing_warm_restarts_eta_min: float = 8E-6
+    clip_grad_norm_max_norm: Optional[float] = 2.0
 
 
 @unique
 class MetricsTag(Enum):
-    TRAIN_LOSS = 'train_loss'
-    DEV_LOSS = 'dev_loss'
+    TRAIN_ROUGH_LOSS = 'train_rough_loss'
+    TRAIN_PRECISE_LOSS = 'train_precise_loss'
+    DEV_ROUGH_LOSS = 'dev_rough_loss'
+    DEV_PRECISE_LOSS = 'dev_precise_loss'
 
 
 @attrs.define
@@ -96,7 +112,8 @@ def train(
     epoch_config_json: Optional[str] = None,
     model_config_json: Optional[str] = None,
     optimizer_config_json: Optional[str] = None,
-    loss_config_json: Optional[str] = None,
+    rough_loss_config_json: Optional[str] = None,
+    precise_loss_config_json: Optional[str] = None,
     restore_state_dict_path: Optional[str] = None,
     restore_epoch_idx: bool = True,
     reset_epoch_idx_to_value: Optional[int] = None,
@@ -152,15 +169,29 @@ def train(
     logger.info(cattrs.unstructure(optimizer_config))
     io.write_json(out_fd / 'optimizer_config.json', cattrs.unstructure(optimizer_config), indent=2)
 
-    loss_config = dyn_structure(
-        loss_config_json,
-        AdaptiveScalingLossFunctionConifg,
+    rough_loss_config = dyn_structure(
+        rough_loss_config_json,
+        AdaptiveScalingRoughLossFunctionConifg,
         support_path_type=True,
         support_none_type=True,
     )
-    logger.info('loss_config:')
-    logger.info(cattrs.unstructure(loss_config))
-    io.write_json(out_fd / 'loss_config.json', cattrs.unstructure(loss_config), indent=2)
+    logger.info('rough_loss_config:')
+    logger.info(cattrs.unstructure(rough_loss_config))
+    io.write_json(
+        out_fd / 'rough_loss_config.json', cattrs.unstructure(rough_loss_config), indent=2
+    )
+
+    precise_loss_config = dyn_structure(
+        precise_loss_config_json,
+        AdaptiveScalingPreciseLossFunctionConifg,
+        support_path_type=True,
+        support_none_type=True,
+    )
+    logger.info('precise_loss_config:')
+    logger.info(cattrs.unstructure(precise_loss_config))
+    io.write_json(
+        out_fd / 'precise_loss_config.json', cattrs.unstructure(precise_loss_config), indent=2
+    )
 
     device = torch.device(device_value)
     logger.info(f'device = {device}')
@@ -187,15 +218,19 @@ def train(
         io.file(dataset_config.dev_adaptive_scaling_dataset_steps_json, expandvars=True),
         out_fd / 'dev_adaptive_scaling_dataset_steps.json',
     )
-    dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
-        AdaptiveScalingIterableDatasetConfig(
-            steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
-            num_samples=dev_num_samples,
-            rng_seed=epoch_config.dev_rng_seed,
-            num_processes=epoch_config.dev_num_processes,
-            is_dev=True,
+    dev_adaptive_scaling_dataset = None
+    if not epoch_config.enable_overfit_testing \
+            and not epoch_config.enable_multitask_gradiant_inspection:
+        dev_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
+            AdaptiveScalingIterableDatasetConfig(
+                steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+                num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
+                num_samples=dev_num_samples,
+                rng_seed=epoch_config.dev_rng_seed,
+                num_processes=epoch_config.dev_num_processes,
+                is_dev=True,
+            )
         )
-    )
 
     assert len(dataset_config.epoch_indices) \
         == len(dataset_config.train_adaptive_scaling_dataset_steps_jsons)
@@ -218,6 +253,7 @@ def train(
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
             AdaptiveScalingIterableDatasetConfig(
                 steps_json=epoch_idx_to_train_adaptive_scaling_dataset_steps_json[0],
+                num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
                 num_samples=train_num_samples,
                 rng_seed=epoch_idx_to_train_rng_seed[0],
                 num_processes=epoch_config.train_num_processes,
@@ -228,6 +264,7 @@ def train(
         train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
             AdaptiveScalingIterableDatasetConfig(
                 steps_json=dataset_config.dev_adaptive_scaling_dataset_steps_json,
+                num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
                 num_samples=train_num_samples,
                 num_samples_reset_rng=dev_num_samples,
                 rng_seed=epoch_config.dev_rng_seed,
@@ -243,7 +280,8 @@ def train(
     del model
 
     # Loss.
-    loss_function = AdaptiveScalingLossFunction(loss_config)
+    rough_loss_function = AdaptiveScalingRoughLossFunction(rough_loss_config)
+    precise_loss_function = AdaptiveScalingPreciseLossFunction(precise_loss_config)
 
     # Optimizer.
     optimizer = torch.optim.AdamW(
@@ -300,23 +338,22 @@ def train(
         epoch_idx = reset_epoch_idx_to_value
 
     # Dataloader.
-    # Disable pin memory due to possible memory leak (I'm not sure).
-    dev_data_loader = DataLoader(
-        dev_adaptive_scaling_dataset,
-        collate_fn=adaptive_scaling_dataset_collate_fn,
-        batch_size=epoch_config.dev_batch_size,
-        # pin_memory=device_is_cuda(device),
-        # pin_memory_device=str(device) if device_is_cuda(device) else '',
-    )
+    dev_data_loader = None
+    if dev_adaptive_scaling_dataset is not None:
+        dev_data_loader = DataLoader(
+            dev_adaptive_scaling_dataset,
+            collate_fn=adaptive_scaling_dataset_collate_fn,
+            batch_size=epoch_config.dev_batch_size,
+        )
     train_data_loader = DataLoader(
         train_adaptive_scaling_dataset,
         collate_fn=adaptive_scaling_dataset_collate_fn,
         batch_size=epoch_config.train_batch_size,
-        # pin_memory=device_is_cuda(device),
-        # pin_memory_device=str(device) if device_is_cuda(device) else '',
     )
 
     best_dev_loss = float('inf')
+    best_dev_rough_loss = float('inf')
+    best_dev_precise_loss = float('inf')
 
     while epoch_idx < epoch_config.num_epochs:
         if epoch_idx > 0 and epoch_idx in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
@@ -340,6 +377,7 @@ def train(
             train_adaptive_scaling_dataset = AdaptiveScalingIterableDataset(
                 AdaptiveScalingIterableDatasetConfig(
                     steps_json=train_adaptive_scaling_dataset_steps_json,
+                    num_page_char_regression_labels=epoch_config.num_page_char_regression_labels,
                     num_samples=train_num_samples,
                     rng_seed=train_rng_seed,
                     num_processes=epoch_config.train_num_processes,
@@ -350,8 +388,6 @@ def train(
                 train_adaptive_scaling_dataset,
                 collate_fn=adaptive_scaling_dataset_collate_fn,
                 batch_size=epoch_config.train_batch_size,
-                # pin_memory=device_is_cuda(device),
-                # pin_memory_device=str(device) if device_is_cuda(device) else '',
             )
 
         logger.info('Training...')
@@ -359,19 +395,76 @@ def train(
         torch.set_grad_enabled(True)
 
         for batch_idx, batch in enumerate(train_data_loader, start=1):
-            batch = batch_to_device(batch, device)
-            mask_feature, scale_feature = model_jit(batch['image'])
+            # Train rough prediction.
+            rough_batch = batch_to_device(batch['rough'], device)
+            (
+                rough_char_mask_feature,
+                rough_char_height_feature,
+            ) = model_jit.forward_rough(rough_batch['image'])  # type: ignore
 
-            loss = loss_function(
-                mask_feature=mask_feature,
-                scale_feature=scale_feature,
-                downsampled_mask=batch['downsampled_mask'],
-                downsampled_score_map=batch['downsampled_score_map'],
-                downsampled_shape=batch['downsampled_shape'],
-                downsampled_core_box=batch['downsampled_core_box'],
+            rough_loss = rough_loss_function(
+                rough_char_mask_feature=rough_char_mask_feature,
+                rough_char_height_feature=rough_char_height_feature,
+                downsampled_mask=rough_batch['downsampled_mask'],
+                downsampled_score_map=rough_batch['downsampled_score_map'],
+                downsampled_shape=rough_batch['downsampled_shape'],
+                downsampled_core_box=rough_batch['downsampled_core_box'],
             )
-            avg_loss = metrics.update(MetricsTag.TRAIN_LOSS, float(loss))
-            loss.backward()
+            rough_loss /= 2
+
+            rough_avg_loss = metrics.update(MetricsTag.TRAIN_ROUGH_LOSS, float(rough_loss))
+            rough_loss.backward()
+            del rough_batch
+            del rough_loss
+
+            rough_name_to_grad = None
+            if epoch_config.enable_multitask_gradiant_inspection:
+                rough_name_to_grad = AdaptiveScaling.debug_get_rough_name_to_grad(model_jit)
+
+            # Train precise prediction.
+            precise_batch = batch_to_device(batch['precise'], device)
+            (
+                precise_char_mask_feature,
+                precise_char_prob_feature,
+                precise_char_up_left_corner_offset_feature,
+                precise_char_corner_angle_feature,
+                precise_char_corner_distance_feature,
+            ) = model_jit.forward_precise(precise_batch['image'])  # type: ignore
+
+            precise_loss = precise_loss_function(
+                precise_char_mask_feature=precise_char_mask_feature,
+                precise_char_prob_feature=precise_char_prob_feature,
+                precise_char_up_left_corner_offset_feature=(
+                    precise_char_up_left_corner_offset_feature
+                ),
+                precise_char_corner_angle_feature=precise_char_corner_angle_feature,
+                precise_char_corner_distance_feature=precise_char_corner_distance_feature,
+                downsampled_char_prob_score_map=precise_batch['downsampled_score_map'],
+                downsampled_char_mask=precise_batch['downsampled_mask'],
+                downsampled_shape=precise_batch['downsampled_shape'],
+                downsampled_core_box=precise_batch['downsampled_core_box'],
+                downsampled_label_point_y=precise_batch['downsampled_label_point_y'],
+                downsampled_label_point_x=precise_batch['downsampled_label_point_x'],
+                char_up_left_offsets=precise_batch['up_left_offsets'],
+                char_corner_angles=precise_batch['corner_angles'],
+                char_corner_distances=precise_batch['corner_distances'],
+            )
+            precise_loss /= 2
+
+            precise_avg_loss = metrics.update(MetricsTag.TRAIN_PRECISE_LOSS, float(precise_loss))
+            precise_loss.backward()
+            del precise_batch
+            del precise_loss
+
+            precise_name_to_grad = None
+            if epoch_config.enable_multitask_gradiant_inspection:
+                assert rough_name_to_grad is not None
+                precise_name_to_grad = \
+                    AdaptiveScaling.debug_get_precise_name_to_grad(model_jit, rough_name_to_grad)
+
+                AdaptiveScaling.debug_inspect_name_to_grad(rough_name_to_grad, precise_name_to_grad)
+                del rough_name_to_grad
+                del precise_name_to_grad
 
             if optimizer_config.clip_grad_norm_max_norm is not None:
                 torch.nn.utils.clip_grad_norm_(  # type: ignore
@@ -389,43 +482,112 @@ def train(
                 logger.info(
                     f'E={epoch_idx}, '
                     f'B={batch_idx}/{epoch_config.train_num_batches}, '
-                    f'L={avg_loss:.5f}, '
+                    f'L_rough={rough_avg_loss:.5f}, '
+                    f'L_precise={precise_avg_loss:.5f}, '
+                    f'L_sum={rough_avg_loss + precise_avg_loss:.5f}, '
                     f'LR={optimizer_scheduler.get_last_lr()[-1]:.6f}'
                 )
 
         logger.info('Evaluating...')
         model_jit.eval()
         torch.set_grad_enabled(False)
+        metrics.reset([MetricsTag.DEV_ROUGH_LOSS, MetricsTag.DEV_PRECISE_LOSS])
 
-        metrics.reset([MetricsTag.DEV_LOSS])
+        dev_rough_losses: List[float] = []
+        dev_precise_losses: List[float] = []
         dev_losses: List[float] = []
+
+        assert dev_data_loader is not None
         for batch_idx, batch in enumerate(dev_data_loader, start=1):
-            batch = batch_to_device(batch, device)
-            mask_feature, scale_feature = model_jit(batch['image'])
+            # Evaluate rough prediction.
+            rough_batch = batch_to_device(batch['rough'], device)
+            (
+                rough_char_mask_feature,
+                rough_char_height_feature,
+            ) = model_jit.forward_rough(rough_batch['image'])  # type: ignore
 
-            loss = loss_function(
-                mask_feature=mask_feature,
-                scale_feature=scale_feature,
-                downsampled_mask=batch['downsampled_mask'],
-                downsampled_score_map=batch['downsampled_score_map'],
-                downsampled_shape=batch['downsampled_shape'],
-                downsampled_core_box=batch['downsampled_core_box'],
+            rough_loss = rough_loss_function(
+                rough_char_mask_feature=rough_char_mask_feature,
+                rough_char_height_feature=rough_char_height_feature,
+                downsampled_mask=rough_batch['downsampled_mask'],
+                downsampled_score_map=rough_batch['downsampled_score_map'],
+                downsampled_shape=rough_batch['downsampled_shape'],
+                downsampled_core_box=rough_batch['downsampled_core_box'],
             )
-            loss = float(loss)
-            dev_losses.append(loss)
+            rough_loss = float(rough_loss)
+            rough_loss /= 2
 
-            avg_loss = metrics.update(MetricsTag.DEV_LOSS, loss)
+            rough_avg_loss = metrics.update(MetricsTag.DEV_ROUGH_LOSS, float(rough_loss))
+            del rough_batch
+
+            # Evaluate precise prediction.
+            precise_batch = batch_to_device(batch['precise'], device)
+            (
+                precise_char_mask_feature,
+                precise_char_prob_feature,
+                precise_char_up_left_corner_offset_feature,
+                precise_char_corner_angle_feature,
+                precise_char_corner_distance_feature,
+            ) = model_jit.forward_precise(precise_batch['image'])  # type: ignore
+
+            precise_loss = precise_loss_function(
+                precise_char_mask_feature=precise_char_mask_feature,
+                precise_char_prob_feature=precise_char_prob_feature,
+                precise_char_up_left_corner_offset_feature=(
+                    precise_char_up_left_corner_offset_feature
+                ),
+                precise_char_corner_angle_feature=precise_char_corner_angle_feature,
+                precise_char_corner_distance_feature=precise_char_corner_distance_feature,
+                downsampled_char_prob_score_map=precise_batch['downsampled_score_map'],
+                downsampled_char_mask=precise_batch['downsampled_mask'],
+                downsampled_shape=precise_batch['downsampled_shape'],
+                downsampled_core_box=precise_batch['downsampled_core_box'],
+                downsampled_label_point_y=precise_batch['downsampled_label_point_y'],
+                downsampled_label_point_x=precise_batch['downsampled_label_point_x'],
+                char_up_left_offsets=precise_batch['up_left_offsets'],
+                char_corner_angles=precise_batch['corner_angles'],
+                char_corner_distances=precise_batch['corner_distances'],
+            )
+            precise_loss = float(precise_loss)
+            precise_loss /= 2
+
+            precise_avg_loss = metrics.update(MetricsTag.DEV_PRECISE_LOSS, float(precise_loss))
+            del precise_batch
+
             if batch_idx % 4 == 0 or batch_idx >= epoch_config.dev_num_batches:
                 logger.info(
                     f'E={epoch_idx}, '
                     f'B={batch_idx}/{epoch_config.dev_num_batches}, '
-                    f'L={avg_loss:.5f}'
+                    f'L_rough={rough_avg_loss:.5f}, '
+                    f'L_precise={precise_avg_loss:.5f}, '
+                    f'L_sum={rough_avg_loss + precise_avg_loss:.5f}, '
                 )
 
+            dev_rough_losses.append(rough_loss)
+            dev_precise_losses.append(precise_loss)
+            dev_losses.append(rough_loss + precise_loss)
+
+        dev_rough_loss = statistics.mean(dev_rough_losses)
+        dev_precise_loss = statistics.mean(dev_precise_losses)
         dev_loss = statistics.mean(dev_losses)
-        logger.info(f'E={epoch_idx}, dev_loss = {dev_loss}')
+        logger.info(
+            f'E={epoch_idx}, '
+            f'dev_rough_loss = {dev_rough_loss}, '
+            f'dev_precise_loss = {dev_precise_loss}, '
+            f'dev_loss = {dev_loss}'
+        )
+
+        if dev_rough_loss < best_dev_rough_loss:
+            best_dev_rough_loss = dev_rough_loss
+            logger.info(f'E={epoch_idx}, FOR NOW THE BEST ROUGH LOSS.')
+
+        if dev_precise_loss < best_dev_precise_loss:
+            best_dev_precise_loss = dev_precise_loss
+            logger.info(f'E={epoch_idx}, FOR NOW THE BEST PRECISE LOSS.')
+
         if dev_loss < best_dev_loss \
-                or epoch_idx + 1 in epoch_idx_to_train_adaptive_scaling_dataset_steps_json:
+                or epoch_idx + 1 in epoch_idx_to_train_adaptive_scaling_dataset_steps_json \
+                or epoch_idx + 1 == epoch_config.num_epochs:
 
             if dev_loss < best_dev_loss:
                 best_dev_loss = dev_loss
