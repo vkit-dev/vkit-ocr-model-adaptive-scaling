@@ -48,13 +48,13 @@ class AdaptiveScalingInferencingConfig:
     rough_valid_char_height_min: float = 3.0
     precise_text_region_flattener_typical_long_side_ratio_min: float = 3.0
     precise_text_region_flattener_text_region_polygon_dilate_ratio: float = 0.8
-    precise_flattened_text_region_resized_char_height_median: int = 32
+    precise_flattened_text_region_resized_char_height_median: int = 40
     precise_flattened_text_region_resized_ratio_min: float = 0.25
     precise_stack_flattened_text_regions_page_pad: int = 10
     precise_stack_flattened_text_regions_pad: int = 2
     precise_char_mask_positive_thr: float = 0.5
     precise_build_polygons_positive_char_prob_thr: float = 0.8
-    precise_build_polygons_maximum_filter_size: float = 10
+    precise_build_polygons_maximum_filter_size: float = 5
 
 
 @attrs.define
