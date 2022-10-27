@@ -15,12 +15,18 @@ import logging
 
 import torch
 import numpy as np
+from scipy.ndimage import maximum_filter
 import cv2 as cv
 import iolite as io
 import attrs
 
 from vkit.utility import PathType
-from vkit.element import Point, Polygon, Mask, ScoreMap, Image
+from vkit.element import Point, PointTuple, Box, Polygon, Mask, ScoreMap, Image
+from vkit.mechanism.distortion.geometric.affine import (
+    affine_polygons,
+    RotateConfig,
+    RotateState,
+)
 from vkit.pipeline.text_detection.page_text_region import (
     stack_flattened_text_regions,
     FlattenedTextRegion,
@@ -42,11 +48,13 @@ class AdaptiveScalingInferencingConfig:
     rough_valid_char_height_min: float = 3.0
     precise_text_region_flattener_typical_long_side_ratio_min: float = 3.0
     precise_text_region_flattener_text_region_polygon_dilate_ratio: float = 0.8
-    precise_flattened_text_region_resized_char_height_median: int = 36
+    precise_flattened_text_region_resized_char_height_median: int = 32
     precise_flattened_text_region_resized_ratio_min: float = 0.25
     precise_stack_flattened_text_regions_page_pad: int = 10
     precise_stack_flattened_text_regions_pad: int = 2
     precise_char_mask_positive_thr: float = 0.5
+    precise_build_polygons_positive_char_prob_thr: float = 0.8
+    precise_build_polygons_maximum_filter_size: float = 10
 
 
 @attrs.define
@@ -433,3 +441,137 @@ class AdaptiveScalingInferencing:
         )
 
         return Polygon.create([up_left, up_right, down_right, down_left])
+
+    def precise_build_grouped_polygons(
+        self,
+        precise_infer_result: AdaptiveScalingInferencingPresiceInferResult,
+        flattened_text_regions: Sequence[FlattenedTextRegion],
+        boxes: Sequence[Box],
+    ):
+        padded_image = precise_infer_result.padded_image
+        precise_char_mask = precise_infer_result.precise_char_mask
+        precise_char_prob_score_map = precise_infer_result.precise_char_prob_score_map
+
+        assert len(flattened_text_regions) == len(boxes)
+
+        # Find the peaks.
+        mat = precise_char_prob_score_map.mat.copy()
+
+        mat[~precise_char_mask.np_mask] = 0
+
+        np_local_maximum = maximum_filter(
+            mat,
+            size=self.config.precise_build_polygons_maximum_filter_size,
+        )
+        np_mask = (np_local_maximum == mat)
+
+        np_mask[mat < self.config.precise_build_polygons_positive_char_prob_thr] = 0
+
+        # Convert peaks to points.
+        grouped_points: List[PointTuple] = []
+        for flattened_text_region, box in zip(flattened_text_regions, boxes):
+            assert flattened_text_region.shape == box.shape
+            downsampled_box = box.to_conducted_resized_box(
+                padded_image,
+                resized_height=precise_char_prob_score_map.height,
+                resized_width=precise_char_prob_score_map.width,
+            )
+            downsampled_flattened_mask = flattened_text_region.flattened_mask.to_resized_mask(
+                resized_height=downsampled_box.height,
+                resized_width=downsampled_box.width,
+            )
+
+            np_boxed_mask = downsampled_box.extract_np_array(np_mask)
+            np_boxed_mask[~downsampled_flattened_mask.np_mask] = 0
+
+            np_boxed_ys, np_boxed_xs = np.nonzero(np_boxed_mask)
+            boxed_points = PointTuple.from_np_array(np.column_stack((np_boxed_xs, np_boxed_ys)))
+            points = boxed_points.to_shifted_points(
+                offset_y=downsampled_box.up,
+                offset_x=downsampled_box.left,
+            )
+            grouped_points.append(points)
+
+        # Build polygons.
+        grouped_polygons: List[List[Polygon]] = []
+        for points in grouped_points:
+            polygons = [self.precise_build_polygon(precise_infer_result, point) for point in points]
+            grouped_polygons.append(polygons)
+
+        return grouped_polygons
+
+    @classmethod
+    def precise_build_remapped_polygons(
+        cls,
+        flattened_text_regions: Sequence[FlattenedTextRegion],
+        boxes: Sequence[Box],
+        grouped_polygons: Sequence[Sequence[Polygon]],
+    ):
+        remapped_polygons: List[Polygon] = []
+
+        np_trans_mat_last_row = np.asarray((0.0, 0.0, 1.0), dtype=np.float32)
+
+        assert len(flattened_text_regions) == len(boxes) == len(grouped_polygons)
+        for flattened_text_region, box, polygons in zip(
+            flattened_text_regions, boxes, grouped_polygons
+        ):
+            if not polygons:
+                continue
+
+            assert flattened_text_region.shape == box.shape
+
+            # 1. Undo resize and trim.
+            height_before_resize, width_before_resize = flattened_text_region.shape_before_resize
+            rotated_trimmed_box = flattened_text_region.rotated_trimmed_box
+            assert flattened_text_region.post_rotate_angle == 0
+
+            after_rotate_remapped_polygons: List[Polygon] = []
+            for polygon in polygons:
+                polygon = polygon.to_relative_polygon(
+                    origin_y=box.up,
+                    origin_x=box.left,
+                )
+                polygon = polygon.to_conducted_resized_polygon(
+                    flattened_text_region.shape,
+                    resized_height=height_before_resize,
+                    resized_width=width_before_resize,
+                )
+                polygon = polygon.to_shifted_polygon(
+                    offset_y=rotated_trimmed_box.up,
+                    offset_x=rotated_trimmed_box.left,
+                )
+                after_rotate_remapped_polygons.append(polygon)
+
+            # 2. Undo rotate.
+            bounding_extended_text_region_box = \
+                flattened_text_region.bounding_extended_text_region_mask.box
+            assert bounding_extended_text_region_box
+
+            flattening_rotate_angle = flattened_text_region.flattening_rotate_angle
+
+            rotate_state = RotateState(
+                config=RotateConfig(flattening_rotate_angle),
+                shape=bounding_extended_text_region_box.shape,
+                rng=None,
+            )
+            trans_mat = rotate_state.trans_mat
+            assert trans_mat.shape == (2, 3)
+
+            trans_mat = np.vstack((trans_mat, np_trans_mat_last_row))
+            inv_trans_mat = np.linalg.inv(trans_mat)
+
+            before_rotate_remapped_polygons = affine_polygons(
+                inv_trans_mat,
+                after_rotate_remapped_polygons,
+            )
+
+            # 3. Shift back.
+            for polygon in before_rotate_remapped_polygons:
+                remapped_polygons.append(
+                    polygon.to_shifted_polygon(
+                        offset_y=bounding_extended_text_region_box.up,
+                        offset_x=bounding_extended_text_region_box.left,
+                    )
+                )
+
+        return remapped_polygons
