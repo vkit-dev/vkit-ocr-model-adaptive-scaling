@@ -131,7 +131,7 @@ class AdaptiveScalingRoughLossFunction:
 
 @attrs.define
 class AdaptiveScalingPreciseLossFunctionConifg:
-    char_mask_focal_factor: float = 6.666666666666667
+    char_mask_focal_factor: float = 5.0
     char_prob_l1_factor: float = 5.0
     char_up_left_offset_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
