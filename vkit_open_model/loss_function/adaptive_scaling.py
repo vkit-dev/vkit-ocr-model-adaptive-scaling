@@ -134,6 +134,7 @@ class AdaptiveScalingPreciseLossFunctionConifg:
     char_mask_focal_factor: float = 5.0
     char_prob_l1_factor: float = 5.0
     char_up_left_offset_l1_factor: float = 1.0
+    char_up_left_distance_regulation_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
     char_corner_distance_l1_factor: float = 1.0
     loss_factor: float = 0.15
@@ -150,6 +151,7 @@ class AdaptiveScalingPreciseLossFunction:
         self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.25)
         # Up-left corner.
         self.char_up_left_offset_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
+        self.char_up_left_distance_regulation_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
         # Corner angle.
         self.char_corner_angle_cross_entropy = CrossEntropyWithLogitsLossFunction()
         # Corner distance.
@@ -179,7 +181,7 @@ class AdaptiveScalingPreciseLossFunction:
         precise_char_up_left_corner_offset_feature: torch.Tensor,
         # (B, 4, H, W)
         precise_char_corner_angle_feature: torch.Tensor,
-        # (B, 3, H, W)
+        # (B, 4, H, W)
         precise_char_corner_distance_feature: torch.Tensor,
         # Ground truths.
         # (B, CH, CW)
@@ -239,12 +241,21 @@ class AdaptiveScalingPreciseLossFunction:
         char_corner_angles = char_corner_angles.transpose(1, 2)
 
         # Corner distance.
-        # (B, P, 3)
+        # (B, P, 4)
         precise_char_corner_distance_label_point_feature = self.get_label_point_feature(
+            # Trim the up-left corner distance.
             feature=precise_char_corner_distance_feature,
             label_point_y=downsampled_label_point_y,
             label_point_x=downsampled_label_point_x,
         )
+        # Up-left trimmed.
+        # (B, P, 3)
+        precise_char_up_left_trimmed_corner_distance_label_point_feature = \
+            precise_char_corner_distance_label_point_feature[:, :, 1:]
+        # Up-left only.
+        # (B, P, 1)
+        precise_char_up_left_only_corner_distance_label_point_feature = \
+            precise_char_corner_distance_label_point_feature[:, :, 0:1]
 
         loss = 0.0
 
@@ -267,6 +278,19 @@ class AdaptiveScalingPreciseLossFunction:
                 gt=char_up_left_offsets,
             )
 
+        if self.config.char_up_left_distance_regulation_l1_factor > 0:
+            factor = self.config.char_up_left_distance_regulation_l1_factor
+            loss += factor * self.char_up_left_distance_regulation_l1(
+                pred=torch.linalg.norm(
+                    precise_char_up_left_corner_offset_label_point_feature,
+                    dim=2,
+                ),
+                gt=torch.squeeze(
+                    precise_char_up_left_only_corner_distance_label_point_feature,
+                    dim=2,
+                )
+            )
+
         if self.config.char_corner_angle_cross_entropy_factor > 0:
             factor = self.config.char_corner_angle_cross_entropy_factor
             loss += factor * self.char_corner_angle_cross_entropy(
@@ -276,7 +300,7 @@ class AdaptiveScalingPreciseLossFunction:
 
         if self.config.char_corner_distance_l1_factor > 0:
             loss += self.config.char_corner_distance_l1_factor * self.char_corner_distance_l1(
-                pred=precise_char_corner_distance_label_point_feature,
+                pred=precise_char_up_left_trimmed_corner_distance_label_point_feature,
                 gt=char_corner_distances,
             )
 

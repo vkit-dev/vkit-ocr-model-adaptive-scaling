@@ -128,7 +128,7 @@ class AdaptiveScaling(nn.Module):
         self.precise_char_corner_distance_head = nn.Sequential(
             head_creator(
                 in_channels=neck_out_channels,
-                out_channels=3,
+                out_channels=4,
                 upsampling_factor=2,
             ),
             # Force predicting positive value.

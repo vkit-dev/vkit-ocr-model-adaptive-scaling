@@ -329,7 +329,8 @@ def adaptive_scaling_dataset_collate_fn(batch: Iterable[Tuple[RoughSample, Preci
         # Corner distances, (P, 3)
         corner_distances = np.array(
             [
-                dpcrl.generate_non_up_left_distances()
+                # Trim the up-left distance.
+                dpcrl.generate_clockwise_distances()[1:]
                 for dpcrl in downsampled_page_char_regression_labels
             ],
             dtype=np.float32,

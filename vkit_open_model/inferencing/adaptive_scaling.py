@@ -272,7 +272,13 @@ class AdaptiveScalingInferencing:
         return resized_flattened_text_regions
 
     def stack_flattened_text_regions(self, flattened_text_regions: Sequence[FlattenedTextRegion]):
-        image, boxes, _ = stack_flattened_text_regions(
+        (
+            image,
+            _,
+            boxes,
+            _,
+            _,
+        ) = stack_flattened_text_regions(
             page_pad=self.config.precise_stack_flattened_text_regions_page_pad,
             flattened_text_regions_pad=self.config.precise_stack_flattened_text_regions_pad,
             flattened_text_regions=flattened_text_regions,
