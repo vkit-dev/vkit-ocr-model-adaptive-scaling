@@ -9,7 +9,7 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 from vkit.element import Box
@@ -19,6 +19,7 @@ from .weighted_bce_with_logits import WeightedBceWithLogitsLossFunction
 from .focal_with_logits import FocalWithLogitsLossFunction
 from .dice import DiceLossFunction
 from .l1 import L1LossFunction
+from .weight_adaptive_heatmap_regression import WeightAdaptiveHeatmapRegressionLossFunction
 from .cross_entropy_with_logits import CrossEntropyWithLogitsLossFunction
 
 
@@ -131,8 +132,9 @@ class AdaptiveScalingRoughLossFunction:
 
 @attrs.define
 class AdaptiveScalingPreciseLossFunctionConifg:
-    char_mask_focal_factor: float = 5.0
-    char_prob_l1_factor: float = 5.0
+    char_mask_focal_factor: float = 0.0
+    char_prob_l1_factor: float = 0.0
+    char_prob_wahr_factor: float = 7.0
     char_up_left_offset_l1_factor: float = 1.0
     char_up_left_distance_regulation_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
@@ -149,6 +151,7 @@ class AdaptiveScalingPreciseLossFunction:
         self.char_mask_focal_with_logits = FocalWithLogitsLossFunction()
         # Prob.
         self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.25)
+        self.char_prob_wahr = WeightAdaptiveHeatmapRegressionLossFunction()
         # Up-left corner.
         self.char_up_left_offset_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
         self.char_up_left_distance_regulation_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
@@ -175,7 +178,7 @@ class AdaptiveScalingPreciseLossFunction:
         self,
         # Model predictions.
         # (B, 1, H, W)
-        precise_char_mask_feature: torch.Tensor,
+        precise_char_mask_feature: Optional[torch.Tensor],
         precise_char_prob_feature: torch.Tensor,
         # (B, 2, H, W)
         precise_char_up_left_corner_offset_feature: torch.Tensor,
@@ -202,18 +205,21 @@ class AdaptiveScalingPreciseLossFunction:
     ) -> torch.Tensor:
         # Prob.
         # (B, H, W)
-        assert precise_char_mask_feature.shape == precise_char_prob_feature.shape
+        if precise_char_mask_feature is not None:
+            assert precise_char_mask_feature.shape == precise_char_prob_feature.shape
         assert precise_char_prob_feature.shape[1:] == (1, *downsampled_shape)
 
-        precise_char_mask_feature = torch.squeeze(precise_char_mask_feature, dim=1)
+        if precise_char_mask_feature is not None:
+            precise_char_mask_feature = torch.squeeze(precise_char_mask_feature, dim=1)
         precise_char_prob_feature = torch.squeeze(precise_char_prob_feature, dim=1)
 
         # (B, CH, CW)
-        precise_char_mask_feature = precise_char_mask_feature[
-            :,
-            downsampled_core_box.up:downsampled_core_box.down + 1,
-            downsampled_core_box.left:downsampled_core_box.right + 1
-        ]  # yapf: disable
+        if precise_char_mask_feature is not None:
+            precise_char_mask_feature = precise_char_mask_feature[
+                :,
+                downsampled_core_box.up:downsampled_core_box.down + 1,
+                downsampled_core_box.left:downsampled_core_box.right + 1
+            ]  # yapf: disable
         precise_char_prob_feature = precise_char_prob_feature[
             :,
             downsampled_core_box.up:downsampled_core_box.down + 1,
@@ -260,6 +266,7 @@ class AdaptiveScalingPreciseLossFunction:
         loss = 0.0
 
         if self.config.char_mask_focal_factor > 0:
+            assert precise_char_mask_feature is not None
             loss += self.config.char_mask_focal_factor * self.char_mask_focal_with_logits(
                 pred=precise_char_mask_feature,
                 gt=downsampled_char_mask,
@@ -270,6 +277,11 @@ class AdaptiveScalingPreciseLossFunction:
                 pred=torch.sigmoid(precise_char_prob_feature),
                 gt=downsampled_char_prob_score_map,
                 mask=downsampled_char_mask,
+            )
+        if self.config.char_prob_wahr_factor > 0:
+            loss += self.config.char_prob_wahr_factor * self.char_prob_wahr(
+                pred=torch.sigmoid(precise_char_prob_feature),
+                gt=downsampled_char_prob_score_map,
             )
 
         if self.config.char_up_left_offset_l1_factor > 0:

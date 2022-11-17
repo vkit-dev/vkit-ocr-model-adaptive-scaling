@@ -53,7 +53,7 @@ class AdaptiveScalingInferencingConfig:
     precise_stack_flattened_text_regions_page_pad: int = 10
     precise_stack_flattened_text_regions_pad: int = 2
     precise_char_mask_positive_thr: float = 0.5
-    precise_build_polygons_positive_char_prob_thr: float = 0.8
+    precise_build_polygons_positive_char_prob_thr: float = 0.7
     precise_build_polygons_maximum_filter_size: float = 5
 
 
@@ -325,10 +325,10 @@ class AdaptiveScalingInferencing:
             torch.permute(precise_char_corner_angle_feature[0], [1, 2, 0])
         assert precise_char_corner_angle_feature.shape[-1] == 4
 
-        # (1, 3, H / 2, D / 2)) -> (H / 2, D / 2, 3))
+        # (1, 4, H / 2, D / 2)) -> (H / 2, D / 2, 4))
         precise_char_corner_distance_feature = \
             torch.permute(precise_char_corner_distance_feature[0], [1, 2, 0])
-        assert precise_char_corner_distance_feature.shape[-1] == 3
+        assert precise_char_corner_distance_feature.shape[-1] == 4
 
         # Generate precise_char_mask.
         precise_char_mask_feature = torch.sigmoid_(precise_char_mask_feature)
@@ -417,8 +417,8 @@ class AdaptiveScalingInferencing:
 
         # Get other corner distances.
         other_corner_distances = precise_np_char_corner_distance[point.y][point.x]
-        assert len(other_corner_distances) == 3
-        up_right_dis, down_right_dis, down_left_dis = other_corner_distances
+        assert len(other_corner_distances) == 4
+        _, up_right_dis, down_right_dis, down_left_dis = other_corner_distances
 
         # Build other corner points.
         theta = np.arctan2(up_left_offset_y, up_left_offset_x)

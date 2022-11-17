@@ -54,10 +54,10 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     torch_seed: int = 133
-    num_epochs: int = 156
+    num_epochs: int = 100
     num_page_char_regression_labels: int = 200
     train_num_batches: int = 1200
-    train_batch_size: int = 5
+    train_batch_size: int = 6
     train_rng_seed: int = 13371
     train_num_processes: int = 10
     dev_num_batches: int = 70
@@ -74,10 +74,10 @@ class OptimizerConfig:
     adamw_lr: float = 8E-4
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
-    cosine_annealing_warm_restarts_t0: int = 12
-    cosine_annealing_warm_restarts_tmulti: int = 3
+    cosine_annealing_warm_restarts_t0: int = 10
+    cosine_annealing_warm_restarts_tmulti: int = 9
     cosine_annealing_warm_restarts_eta_min: float = 8E-6
-    clip_grad_norm_max_norm: Optional[float] = 2.0
+    clip_grad_norm_max_norm: Optional[float] = 2.5
 
 
 @unique
@@ -424,7 +424,6 @@ def train(
             # Train precise prediction.
             precise_batch = batch_to_device(batch['precise'], device)
             (
-                precise_char_mask_feature,
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
                 precise_char_corner_angle_feature,
@@ -432,7 +431,7 @@ def train(
             ) = model_jit.forward_precise(precise_batch['image'])  # type: ignore
 
             precise_loss = precise_loss_function(
-                precise_char_mask_feature=precise_char_mask_feature,
+                precise_char_mask_feature=None,
                 precise_char_prob_feature=precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature=(
                     precise_char_up_left_corner_offset_feature
