@@ -9,7 +9,7 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-from typing import Tuple, List, Sequence
+from typing import Tuple, List, Sequence, Optional
 import math
 import logging
 
@@ -48,7 +48,7 @@ class AdaptiveScalingInferencingConfig:
     rough_valid_char_height_min: float = 3.0
     precise_text_region_flattener_typical_long_side_ratio_min: float = 3.0
     precise_text_region_flattener_text_region_polygon_dilate_ratio: float = 0.8
-    precise_flattened_text_region_resized_char_height_median: int = 40
+    precise_flattened_text_region_resized_char_height_median: int = 35
     precise_flattened_text_region_resized_ratio_min: float = 0.25
     precise_stack_flattened_text_regions_page_pad: int = 10
     precise_stack_flattened_text_regions_pad: int = 2
@@ -68,7 +68,7 @@ class AdaptiveScalingInferencingRoughInferResult:
 @attrs.define
 class AdaptiveScalingInferencingPresiceInferResult:
     padded_image: Image
-    precise_char_mask: Mask
+    precise_char_mask: Optional[Mask]
     precise_char_prob_score_map: ScoreMap
     precise_np_char_up_left_corner_offset: np.ndarray
     precise_np_char_corner_angle_distribution: np.ndarray
@@ -304,15 +304,16 @@ class AdaptiveScalingInferencing:
         with torch.no_grad():
             # (1, 1, H / 2, D / 2)
             (
-                precise_char_mask_feature,
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
                 precise_char_corner_angle_feature,
                 precise_char_corner_distance_feature,
             ) = self.model_jit.forward_precise(x)  # type: ignore
+            precise_char_mask_feature = None
 
         # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
-        precise_char_mask_feature = precise_char_mask_feature[0][0]
+        if precise_char_mask_feature is not None:
+            precise_char_mask_feature = precise_char_mask_feature[0][0]
         precise_char_prob_feature = precise_char_prob_feature[0][0]
 
         # (1, 2, H / 2, D / 2)) -> (H / 2, D / 2, 2))
@@ -331,12 +332,14 @@ class AdaptiveScalingInferencing:
         assert precise_char_corner_distance_feature.shape[-1] == 4
 
         # Generate precise_char_mask.
-        precise_char_mask_feature = torch.sigmoid_(precise_char_mask_feature)
-        precise_char_mask_feature = torch.greater_equal(
-            precise_char_mask_feature,
-            self.config.precise_char_mask_positive_thr,
-        )
-        precise_char_mask_mat = precise_char_mask_feature.numpy().astype(np.uint8)
+        precise_char_mask_mat = None
+        if precise_char_mask_feature is not None:
+            precise_char_mask_feature = torch.sigmoid_(precise_char_mask_feature)
+            precise_char_mask_feature = torch.greater_equal(
+                precise_char_mask_feature,
+                self.config.precise_char_mask_positive_thr,
+            )
+            precise_char_mask_mat = precise_char_mask_feature.numpy().astype(np.uint8)
 
         # Generate precise_char_prob_score_map.
         precise_char_prob_feature = torch.sigmoid_(precise_char_prob_feature)
@@ -346,16 +349,20 @@ class AdaptiveScalingInferencing:
         if image.height < padded_image.height:
             pad_vert_begin = math.ceil(image.height / 2)
             if pad_vert_begin < precise_char_prob_score_map_mat.shape[0]:
-                precise_char_mask_mat[pad_vert_begin:] = 0
+                if precise_char_mask_mat is not None:
+                    precise_char_mask_mat[pad_vert_begin:] = 0
                 precise_char_prob_score_map_mat[pad_vert_begin:] = 0.0
 
         if image.width < padded_image.width:
             pad_hori_begin = math.ceil(image.width / 2)
             if pad_hori_begin < precise_char_prob_score_map_mat.shape[1]:
-                precise_char_mask_mat[:, pad_hori_begin:] = 0
+                if precise_char_mask_mat is not None:
+                    precise_char_mask_mat[:, pad_hori_begin:] = 0
                 precise_char_prob_score_map_mat[:, pad_hori_begin:] = 0.0
 
-        precise_char_mask = Mask(mat=precise_char_mask_mat)
+        precise_char_mask = None
+        if precise_char_mask_mat is not None:
+            precise_char_mask = Mask(mat=precise_char_mask_mat)
         precise_char_prob_score_map = ScoreMap(mat=precise_char_prob_score_map_mat)
 
         # Generate other np arrays.
@@ -463,7 +470,8 @@ class AdaptiveScalingInferencing:
         # Find the peaks.
         mat = precise_char_prob_score_map.mat.copy()
 
-        mat[~precise_char_mask.np_mask] = 0
+        if precise_char_mask is not None:
+            mat[~precise_char_mask.np_mask] = 0
 
         np_local_maximum = maximum_filter(
             mat,
