@@ -16,7 +16,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 import iolite as io
 
-from vkit.element import PointList, Point, Box, Mask, ScoreMap, Image, Painter
+from vkit.element import PointList, Point, Box, Mask, ScoreMap, Image
+from vkit.mechanism.painter import Painter
 from vkit_open_model.model.adaptive_scaling import (
     AdaptiveScalingSize,
     AdaptiveScalingNeckHeadType,
