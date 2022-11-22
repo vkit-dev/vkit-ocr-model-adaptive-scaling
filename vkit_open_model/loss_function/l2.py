@@ -9,25 +9,27 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
+from typing import Optional
+from functools import partial
+
 import torch
 from torch.nn import functional as F
 
 
-# https://arxiv.org/abs/2012.15175
-# Well, doesn't make a lot of sense.
-class WeightAdaptiveHeatmapRegressionLossFunction:
+class L2LossFunction:
 
-    def __init__(self, gamma: float = 0.01):
-        self.gamma = gamma
+    def __init__(self, eps: float = 1E-6):
+        self.eps = eps
 
     def __call__(
         self,
-        # NOTE: should be fed to sigmoid first.
         pred: torch.Tensor,
         gt: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
     ):
-        p = pred
-        soft = gt**self.gamma
-        weight = soft * (1 - p) + (1 - soft) * p
-        l2_loss = F.mse_loss(p, gt, reduction='none')
-        return (weight * l2_loss).mean()
+        if mask is None:
+            return F.mse_loss(pred, gt)
+        else:
+            loss = F.mse_loss(pred, gt, reduction='none')
+            loss *= mask
+            return loss.sum() / (mask.sum() + self.eps)

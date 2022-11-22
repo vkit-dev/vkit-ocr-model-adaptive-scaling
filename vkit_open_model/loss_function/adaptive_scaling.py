@@ -19,6 +19,7 @@ from .weighted_bce_with_logits import WeightedBceWithLogitsLossFunction
 from .focal_with_logits import FocalWithLogitsLossFunction
 from .dice import DiceLossFunction
 from .l1 import L1LossFunction
+from .l2 import L2LossFunction
 from .weight_adaptive_heatmap_regression import WeightAdaptiveHeatmapRegressionLossFunction
 from .cross_entropy_with_logits import CrossEntropyWithLogitsLossFunction
 
@@ -134,7 +135,9 @@ class AdaptiveScalingRoughLossFunction:
 class AdaptiveScalingPreciseLossFunctionConifg:
     char_mask_focal_factor: float = 0.0
     char_prob_l1_factor: float = 0.0
-    char_prob_wahr_factor: float = 7.0
+    char_prob_pos_l2_factor: float = 2.0
+    char_prob_neg_l2_factor: float = 1.0
+    char_prob_wahr_factor: float = 0.0
     char_up_left_offset_l1_factor: float = 1.0
     char_up_left_distance_regulation_l1_factor: float = 1.0
     char_corner_angle_cross_entropy_factor: float = 5.0
@@ -151,6 +154,7 @@ class AdaptiveScalingPreciseLossFunction:
         self.char_mask_focal_with_logits = FocalWithLogitsLossFunction()
         # Prob.
         self.char_prob_l1 = L1LossFunction(smooth=True, smooth_beta=0.25)
+        self.char_prob_l2 = L2LossFunction()
         self.char_prob_wahr = WeightAdaptiveHeatmapRegressionLossFunction()
         # Up-left corner.
         self.char_up_left_offset_l1 = L1LossFunction(smooth=True, smooth_beta=2.5)
@@ -272,17 +276,35 @@ class AdaptiveScalingPreciseLossFunction:
                 gt=downsampled_char_mask,
             )
 
-        if self.config.char_prob_l1_factor > 0:
-            loss += self.config.char_prob_l1_factor * self.char_prob_l1(
-                pred=torch.sigmoid(precise_char_prob_feature),
-                gt=downsampled_char_prob_score_map,
-                mask=downsampled_char_mask,
-            )
-        if self.config.char_prob_wahr_factor > 0:
-            loss += self.config.char_prob_wahr_factor * self.char_prob_wahr(
-                pred=torch.sigmoid(precise_char_prob_feature),
-                gt=downsampled_char_prob_score_map,
-            )
+        if self.config.char_prob_l1_factor > 0 \
+                or self.config.char_prob_pos_l2_factor > 0 \
+                or self.config.char_prob_neg_l2_factor > 0 \
+                or self.config.char_prob_wahr_factor > 0:
+            precise_char_prob_feature_sigmoid = torch.sigmoid(precise_char_prob_feature)
+            if self.config.char_prob_l1_factor > 0:
+                loss += self.config.char_prob_l1_factor * self.char_prob_l1(
+                    pred=precise_char_prob_feature_sigmoid,
+                    gt=downsampled_char_prob_score_map,
+                    mask=downsampled_char_mask,
+                )
+            if self.config.char_prob_pos_l2_factor > 0:
+                loss += self.config.char_prob_pos_l2_factor * self.char_prob_l2(
+                    pred=precise_char_prob_feature_sigmoid,
+                    gt=downsampled_char_prob_score_map,
+                    mask=downsampled_char_mask,
+                )
+            if self.config.char_prob_neg_l2_factor > 0:
+                loss += self.config.char_prob_neg_l2_factor * self.char_prob_l2(
+                    pred=precise_char_prob_feature_sigmoid,
+                    gt=downsampled_char_prob_score_map,
+                    # NOTE: negative mask here.
+                    mask=(1 - downsampled_char_mask),
+                )
+            if self.config.char_prob_wahr_factor > 0:
+                loss += self.config.char_prob_wahr_factor * self.char_prob_wahr(
+                    pred=precise_char_prob_feature_sigmoid,
+                    gt=downsampled_char_prob_score_map,
+                )
 
         if self.config.char_up_left_offset_l1_factor > 0:
             loss += self.config.char_up_left_offset_l1_factor * self.char_up_left_offset_l1(
