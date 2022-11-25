@@ -42,7 +42,7 @@ class AdaptiveScalingNeckHeadType(Enum):
 class AdaptiveScalingConfig:
     size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
     neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
-    rough_upsampling_factor: int = 1
+    rough_upsampling_factor: int = 2
     rough_init_char_height_output_bias: float = 8.0
     precise_upsampling_factor: int = 2
     precise_enable_char_mask_head: bool = False
