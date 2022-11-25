@@ -42,8 +42,9 @@ class AdaptiveScalingNeckHeadType(Enum):
 class AdaptiveScalingConfig:
     size: AdaptiveScalingSize = AdaptiveScalingSize.SMALL
     neck_head_type: AdaptiveScalingNeckHeadType = AdaptiveScalingNeckHeadType.FPN
-    upsampling_factor: int = 2
+    rough_upsampling_factor: int = 1
     rough_init_char_height_output_bias: float = 8.0
+    precise_upsampling_factor: int = 2
     precise_enable_char_mask_head: bool = False
 
 
@@ -83,17 +84,17 @@ class AdaptiveScaling(nn.Module):
             out_channels=neck_out_channels,
         )
 
-        # 2 heads, 2x upsampling, leading to 2x E2E downsampling.
+        # 2 heads, 1x upsampling, leading to 4x E2E downsampling.
         self.rough_char_mask_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=1,
-            upsampling_factor=config.upsampling_factor,
+            upsampling_factor=config.rough_upsampling_factor,
         )
         self.rough_char_height_head = nn.Sequential(
             head_creator(
                 in_channels=neck_out_channels,
                 out_channels=1,
-                upsampling_factor=config.upsampling_factor,
+                upsampling_factor=config.rough_upsampling_factor,
                 init_output_bias=config.rough_init_char_height_output_bias,
             ),
             # Force predicting positive value.
@@ -112,28 +113,28 @@ class AdaptiveScaling(nn.Module):
             self.precise_char_mask_head = head_creator(
                 in_channels=neck_out_channels,
                 out_channels=1,
-                upsampling_factor=config.upsampling_factor,
+                upsampling_factor=config.precise_upsampling_factor,
             )
         self.precise_char_prob_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=1,
-            upsampling_factor=config.upsampling_factor,
+            upsampling_factor=config.precise_upsampling_factor,
         )
         self.precise_char_up_left_corner_offset_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=2,
-            upsampling_factor=config.upsampling_factor,
+            upsampling_factor=config.precise_upsampling_factor,
         )
         self.precise_char_corner_angle_head = head_creator(
             in_channels=neck_out_channels,
             out_channels=4,
-            upsampling_factor=config.upsampling_factor,
+            upsampling_factor=config.precise_upsampling_factor,
         )
         self.precise_char_corner_distance_head = nn.Sequential(
             head_creator(
                 in_channels=neck_out_channels,
                 out_channels=4,
-                upsampling_factor=config.upsampling_factor,
+                upsampling_factor=config.precise_upsampling_factor,
             ),
             # Force predicting positive value.
             nn.Softplus(),

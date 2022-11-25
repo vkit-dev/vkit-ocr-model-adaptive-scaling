@@ -54,10 +54,10 @@ logger = logging.getLogger(__name__)
 @attrs.define
 class EpochConfig:
     torch_seed: int = 133
-    num_epochs: int = 100
+    num_epochs: int = 110
     num_page_char_regression_labels: int = 200
-    train_num_batches: int = 1200
-    train_batch_size: int = 6
+    train_num_batches: int = 1000
+    train_batch_size: int = 8
     train_rng_seed: int = 13371
     train_num_processes: int = 10
     dev_num_batches: int = 70
@@ -75,7 +75,7 @@ class OptimizerConfig:
     adamw_betas: Tuple[float, float] = (0.9, 0.999)
     adamw_weight_decay: float = 0.01
     cosine_annealing_warm_restarts_t0: int = 10
-    cosine_annealing_warm_restarts_tmulti: int = 9
+    cosine_annealing_warm_restarts_tmulti: int = 10
     cosine_annealing_warm_restarts_eta_min: float = 8E-6
     clip_grad_norm_max_norm: Optional[float] = 2.5
 

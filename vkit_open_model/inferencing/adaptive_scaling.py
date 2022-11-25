@@ -43,9 +43,11 @@ class AdaptiveScalingInferencingConfig:
     model_jit: PathType
     device: str = 'cpu'
     backbone_downsampling_factor: int = 32
+    rough_head_upsampling_factor: int = 2
     rough_downsample_short_side_legnth: int = 720
     rough_char_mask_positive_thr: float = 0.5
     rough_valid_char_height_min: float = 3.0
+    precise_head_upsampling_factor: int = 2
     precise_text_region_flattener_typical_long_side_ratio_min: float = 3.0
     precise_text_region_flattener_text_region_polygon_dilate_ratio: float = 0.8
     precise_flattened_text_region_resized_char_height_median: int = 35
@@ -120,19 +122,24 @@ class AdaptiveScalingInferencing:
 
         # Feed to model.
         with torch.no_grad():
-            # (1, 1, H / 2, D / 2)
+            # (1, 1, H / FDF, D / FDF)
             (
                 rough_char_mask_feature,
                 rough_char_height_feature,
             ) = self.model_jit.forward_rough(x)  # type: ignore
 
-        # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
+        # (1, 1, H / FDF, D / FDF)) -> (H / FDF, D / FDF))
         rough_char_mask_feature = rough_char_mask_feature[0][0]
         rough_char_height_feature = rough_char_height_feature[0][0]
+
+        # FDF.
+        feature_downsampling_factor = 4 // self.config.rough_head_upsampling_factor
         # Assert shape.
         assert rough_char_mask_feature.shape == rough_char_height_feature.shape
-        assert rough_char_mask_feature.shape[0] == padded_image.height // 2
-        assert rough_char_mask_feature.shape[1] == padded_image.width // 2
+        assert rough_char_mask_feature.shape[0] \
+            == padded_image.height // feature_downsampling_factor
+        assert rough_char_mask_feature.shape[1] \
+            == padded_image.width // feature_downsampling_factor
 
         # Generate rough_char_mask & rough_char_height_score_map.
         rough_char_mask_feature = torch.sigmoid_(rough_char_mask_feature)
@@ -146,13 +153,13 @@ class AdaptiveScalingInferencing:
 
         # Force padding to be negative.
         if image.height < padded_image.height:
-            pad_vert_begin = math.ceil(image.height / 2)
+            pad_vert_begin = math.ceil(image.height / feature_downsampling_factor)
             if pad_vert_begin < rough_char_mask_mat.shape[0]:
                 rough_char_mask_mat[pad_vert_begin:] = 0
                 rough_char_height_score_map_mat[pad_vert_begin:] = 0.0
 
         if image.width < padded_image.width:
-            pad_hori_begin = math.ceil(image.width / 2)
+            pad_hori_begin = math.ceil(image.width / feature_downsampling_factor)
             if pad_hori_begin < rough_char_mask_mat.shape[1]:
                 rough_char_mask_mat[:, pad_hori_begin:] = 0
                 rough_char_height_score_map_mat[:, pad_hori_begin:] = 0.0
@@ -169,8 +176,8 @@ class AdaptiveScalingInferencing:
 
         # E2E 2x downsampling.
         resized_shape = (
-            math.ceil(image.height / 2),
-            math.ceil(image.width / 2),
+            math.ceil(image.height / feature_downsampling_factor),
+            math.ceil(image.width / feature_downsampling_factor),
         )
 
         return AdaptiveScalingInferencingRoughInferResult(
@@ -302,7 +309,7 @@ class AdaptiveScalingInferencing:
 
         # Feed to model.
         with torch.no_grad():
-            # (1, 1, H / 2, D / 2)
+            # (1, 1, H / FDF, D / FDF)
             (
                 precise_char_prob_feature,
                 precise_char_up_left_corner_offset_feature,
@@ -311,22 +318,22 @@ class AdaptiveScalingInferencing:
             ) = self.model_jit.forward_precise(x)  # type: ignore
             precise_char_mask_feature = None
 
-        # (1, 1, H / 2, D / 2)) -> (H / 2, D / 2))
+        # (1, 1, H / FDF, D / FDF)) -> (H / FDF, D / FDF))
         if precise_char_mask_feature is not None:
             precise_char_mask_feature = precise_char_mask_feature[0][0]
         precise_char_prob_feature = precise_char_prob_feature[0][0]
 
-        # (1, 2, H / 2, D / 2)) -> (H / 2, D / 2, 2))
+        # (1, 2, H / FDF, D / FDF)) -> (H / FDF, D / FDF, 2))
         precise_char_up_left_corner_offset_feature = \
             torch.permute(precise_char_up_left_corner_offset_feature[0], [1, 2, 0])
         assert precise_char_up_left_corner_offset_feature.shape[-1] == 2
 
-        # (1, 4, H / 2, D / 2)) -> (H / 2, D / 2, 4))
+        # (1, 4, H / FDF, D / FDF)) -> (H / FDF, D / FDF, 4))
         precise_char_corner_angle_feature = \
             torch.permute(precise_char_corner_angle_feature[0], [1, 2, 0])
         assert precise_char_corner_angle_feature.shape[-1] == 4
 
-        # (1, 4, H / 2, D / 2)) -> (H / 2, D / 2, 4))
+        # (1, 4, H / FDF, D / FDF)) -> (H / FDF, D / FDF, 4))
         precise_char_corner_distance_feature = \
             torch.permute(precise_char_corner_distance_feature[0], [1, 2, 0])
         assert precise_char_corner_distance_feature.shape[-1] == 4
@@ -345,16 +352,18 @@ class AdaptiveScalingInferencing:
         precise_char_prob_feature = torch.sigmoid_(precise_char_prob_feature)
         precise_char_prob_score_map_mat = precise_char_prob_feature.numpy().astype(np.float32)
 
+        # FDF.
+        feature_downsampling_factor = 4 // self.config.precise_head_upsampling_factor
         # Force padding to be negative.
         if image.height < padded_image.height:
-            pad_vert_begin = math.ceil(image.height / 2)
+            pad_vert_begin = math.ceil(image.height / feature_downsampling_factor)
             if pad_vert_begin < precise_char_prob_score_map_mat.shape[0]:
                 if precise_char_mask_mat is not None:
                     precise_char_mask_mat[pad_vert_begin:] = 0
                 precise_char_prob_score_map_mat[pad_vert_begin:] = 0.0
 
         if image.width < padded_image.width:
-            pad_hori_begin = math.ceil(image.width / 2)
+            pad_hori_begin = math.ceil(image.width / feature_downsampling_factor)
             if pad_hori_begin < precise_char_prob_score_map_mat.shape[1]:
                 if precise_char_mask_mat is not None:
                     precise_char_mask_mat[:, pad_hori_begin:] = 0
