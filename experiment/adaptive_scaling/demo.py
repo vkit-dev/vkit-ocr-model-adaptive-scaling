@@ -69,9 +69,19 @@ def visualize_text_regions(
         flattened_text_region.text_region_polygon
         for flattened_text_region in flattened_text_regions
     ]
+
     painter = Painter(image)
-    painter.paint_polygons(polygons)
+    painter.paint_polygons(polygons, enable_index=True)
     painter.to_file(out_fd / 'text_region_polygons.jpg')
+
+    color = [
+        'red' if flattened_text_region.is_typical else 'blue'
+        for flattened_text_region in flattened_text_regions
+    ]
+
+    painter = Painter(image)
+    painter.paint_polygons(polygons, color=color)
+    painter.to_file(out_fd / 'text_region_polygons_is_typical.jpg')
 
     if False:
         sub_out_fd = io.folder(out_fd / 'text_regions', touch=True)

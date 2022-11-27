@@ -10,7 +10,6 @@
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 from typing import Optional
-from functools import partial
 
 import torch
 from torch.nn import functional as F
