@@ -20,10 +20,23 @@ def print_resnet50():
     print(model)
 
 
+def get_num_params(model: torch.nn.Module):
+    return sum(param.numel() for param in model.parameters() if param.requires_grad)
+
+
 def print_convnext_tiny():
     from torchvision.models.convnext import convnext_tiny
     model = convnext_tiny()
     print(model.features[2])
+    # 28589128
+    print(get_num_params(model))
+
+
+def print_convnext_base():
+    from torchvision.models.convnext import convnext_base
+    model = convnext_base()
+    # 88591464
+    print(get_num_params(model))
 
 
 def test_convnext():
