@@ -27,8 +27,8 @@ def build_dconv3x3_block(in_channels: int):
     )
 
 
-def build_double_conv1x1_block(in_channels: int, out_channels: int):
-    mid_channels = 4 * out_channels
+def build_double_conv1x1_block(in_channels: int, out_channels: int, factor: int = 4):
+    mid_channels = factor * out_channels
     return nn.Sequential(
         helper.conv1x1(in_channels=in_channels, out_channels=mid_channels, use_conv2d=True),
         helper.gelu(),
@@ -290,6 +290,7 @@ class PanHead(nn.Module):
         self.step2_conv = build_double_conv1x1_block(
             in_channels=in_channels,
             out_channels=out_channels,
+            factor=16,
         )
 
         for module in self.modules():
