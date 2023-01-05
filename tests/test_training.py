@@ -34,7 +34,7 @@ def test_metrics():
     assert math.isclose(metrics.update(DebugMetricsTag.FOO, 4), 3)
 
 
-class TestIterableDataset(IterableDataset):
+class ForTestIterableDataset(IterableDataset):
 
     def __init__(self):
         super().__init__()
@@ -58,7 +58,7 @@ def test_rng_seeding():
     setup_seeds(torch_seed=42)
 
     test_data_loader = DataLoader(
-        TestIterableDataset(),
+        ForTestIterableDataset(),
         batch_size=5,
         num_workers=2,
         persistent_workers=True,

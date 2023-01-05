@@ -11,10 +11,12 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 # Backbone.
 from .convnext import ConvNext
+
 # Neck & Head.
 from .upernext import UperNextNeck, UperNextHead
 from .fpn import FpnNeck, FpnHead
-from .pan import PanNeck
+from .pan import PanNeck, PanHead
+
 # Scope-based model.
 from .adaptive_scaling import (
     AdaptiveScalingSize,

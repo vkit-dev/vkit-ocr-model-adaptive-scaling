@@ -15,11 +15,18 @@ import torch
 from torch import nn
 
 
-def conv1x1(in_channels: int, out_channels: int):
-    return nn.Linear(
-        in_features=in_channels,
-        out_features=out_channels,
-    )
+def conv1x1(in_channels: int, out_channels: int, use_conv2d: bool = False):
+    if not use_conv2d:
+        return nn.Linear(
+            in_features=in_channels,
+            out_features=out_channels,
+        )
+    else:
+        return nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+        )
 
 
 def conv3x3(in_channels: int, out_channels: int):
@@ -62,13 +69,28 @@ def dconv7x7(in_channels: int, out_channels: Optional[int] = None):
     if out_channels is None:
         out_channels = in_channels
     else:
-        assert in_channels % out_channels == 0
+        assert out_channels % in_channels == 0
 
     return nn.Conv2d(
         in_channels=in_channels,
         out_channels=out_channels,
         kernel_size=7,
         padding=3,
+        groups=in_channels,
+    )
+
+
+def dconv3x3(in_channels: int, out_channels: Optional[int] = None):
+    if out_channels is None:
+        out_channels = in_channels
+    else:
+        assert out_channels % in_channels == 0
+
+    return nn.Conv2d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=3,
+        padding=1,
         groups=in_channels,
     )
 

@@ -32,6 +32,13 @@ def print_convnext_tiny():
     print(get_num_params(model))
 
 
+def print_convnext_small():
+    from torchvision.models.convnext import convnext_small
+    model = convnext_small()
+    # 50223688
+    print(get_num_params(model))
+
+
 def print_convnext_base():
     from torchvision.models.convnext import convnext_base
     model = convnext_base()

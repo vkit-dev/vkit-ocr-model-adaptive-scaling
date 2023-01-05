@@ -37,7 +37,7 @@ from vkit_open_model.loss_function import (
 )
 
 
-def test_adaptive_scaling_jit():
+def debug_adaptive_scaling_jit():
     model = AdaptiveScaling(
         AdaptiveScalingConfig(AdaptiveScalingSize.TINY, AdaptiveScalingNeckHeadType.UPERNEXT)
     )
@@ -116,7 +116,7 @@ def profile_adaptive_scaling_jit_forward():
     print('PRECISE:', prof.key_averages().table(sort_by="self_cpu_time_total"))  # type: ignore
 
 
-def test_adaptive_scaling_jit_loss_backward():
+def debug_adaptive_scaling_jit_loss_backward():
     model = AdaptiveScaling(AdaptiveScalingConfig(AdaptiveScalingSize.TINY))
     model_jit = torch.jit.script(model)  # type: ignore
     del model

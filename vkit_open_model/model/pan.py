@@ -9,7 +9,7 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-from typing import Sequence, List
+from typing import Sequence, List, Tuple, Optional
 
 import torch
 from torch import nn
@@ -18,136 +18,209 @@ from torch.nn import functional as F
 from . import helper
 
 
-def build_conv1x1_block(in_channels: int, out_channels: int):
+def build_dconv3x3_block(in_channels: int):
     return nn.Sequential(
+        helper.dconv3x3(in_channels=in_channels),
         helper.permute_bchw_to_bhwc(),
-        helper.conv1x1(in_channels=in_channels, out_channels=out_channels),
-        helper.ln(in_channels=out_channels),
+        helper.ln(in_channels=in_channels),
         helper.permute_bhwc_to_bchw(),
-        helper.gelu(),
     )
 
 
-def build_conv3x3_block(in_channels: int, out_channels: int):
+def build_double_conv1x1_block(in_channels: int, out_channels: int):
+    mid_channels = 4 * out_channels
     return nn.Sequential(
-        helper.conv3x3(in_channels=in_channels, out_channels=out_channels),
-        helper.permute_bchw_to_bhwc(),
-        helper.ln(in_channels=out_channels),
-        helper.permute_bhwc_to_bchw(),
+        helper.conv1x1(in_channels=in_channels, out_channels=mid_channels, use_conv2d=True),
         helper.gelu(),
+        helper.conv1x1(in_channels=mid_channels, out_channels=out_channels, use_conv2d=True),
     )
 
 
-def build_pconv2x2_block(in_channels: int, out_channels: int):
+def build_dconv3x3_and_double_conv1x1_block(in_channels: int):
     return nn.Sequential(
-        helper.pconv2x2(in_channels=in_channels, out_channels=out_channels),
+        helper.dconv3x3(in_channels=in_channels),
         helper.permute_bchw_to_bhwc(),
-        helper.ln(in_channels=out_channels),
-        helper.permute_bhwc_to_bchw(),
+        helper.ln(in_channels=in_channels),
+        helper.conv1x1(in_channels=in_channels, out_channels=4 * in_channels),
         helper.gelu(),
+        helper.conv1x1(in_channels=4 * in_channels, out_channels=in_channels),
+        helper.permute_bhwc_to_bchw(),
     )
+
+
+class PanNeckTopDownTopBlock(nn.Module):
+
+    def __init__(self, upper_channels: int, lower_channels: int):
+        super().__init__()
+
+        self.vert_double_conv1x1 = build_double_conv1x1_block(
+            in_channels=upper_channels,
+            out_channels=lower_channels,
+        )
+        self.hori_double_conv1x1 = build_double_conv1x1_block(
+            in_channels=upper_channels,
+            out_channels=lower_channels,
+        )
+
+    def forward(  # type: ignore
+        self,
+        backbone_feature: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return (
+            self.vert_double_conv1x1(backbone_feature),
+            self.hori_double_conv1x1(backbone_feature),
+        )
+
+
+class PanNeckTopDownNormalBlock(nn.Module):
+
+    def __init__(self, upper_channels: int, lower_channels: int, is_bottom: bool):
+        super().__init__()
+
+        mid_channels = 2 * upper_channels
+
+        self.dconv3x3 = build_dconv3x3_block(in_channels=mid_channels)
+
+        self.is_bottom = is_bottom
+        if not is_bottom:
+            self.vert_double_conv1x1 = build_double_conv1x1_block(
+                in_channels=mid_channels,
+                out_channels=lower_channels,
+            )
+        else:
+            self.vert_double_conv1x1 = None
+
+        self.hori_double_conv1x1 = build_double_conv1x1_block(
+            in_channels=mid_channels,
+            out_channels=lower_channels,
+        )
+
+    def forward(  # type: ignore
+        self,
+        upper_neck_feature: torch.Tensor,
+        backbone_feature: torch.Tensor,
+    ) -> Tuple[Optional[torch.Tensor], torch.Tensor]:
+        # Upsample.
+        upper_neck_feature = F.interpolate(
+            upper_neck_feature,
+            size=(backbone_feature.shape[-2], backbone_feature.shape[-1]),
+            mode='nearest',
+        )
+
+        # Concatenate.
+        feature = torch.cat((upper_neck_feature, backbone_feature), dim=1)
+
+        # Apply dconv3x3.
+        feature = self.dconv3x3(feature)
+
+        # Apply conv1x1 for top-down path.
+        if not self.is_bottom:
+            assert self.vert_double_conv1x1 is not None
+            lower_neck_feature = self.vert_double_conv1x1(feature)
+        else:
+            lower_neck_feature = None
+
+        # Apply conv1x1 for bottom-up path.
+        bottom_up_neck_feature = self.hori_double_conv1x1(feature)
+
+        return lower_neck_feature, bottom_up_neck_feature
+
+
+class PanNeckBottomUpBlock(nn.Module):
+
+    def __init__(self, upper_channels: int, lower_channels: int):
+        super().__init__()
+
+        self.pconv2x2 = helper.pconv2x2(in_channels=lower_channels, out_channels=lower_channels)
+
+        mid_channels = 2 * lower_channels
+        self.dconv3x3 = build_dconv3x3_block(in_channels=mid_channels)
+        self.vert_double_conv1x1 = build_double_conv1x1_block(
+            in_channels=mid_channels,
+            out_channels=upper_channels,
+        )
+
+    def forward(  # type: ignore
+        self,
+        lower_neck_feature: torch.Tensor,
+        top_down_hori_feature: torch.Tensor,
+    ) -> torch.Tensor:
+        # Downsample.
+        lower_neck_feature = self.pconv2x2(lower_neck_feature)
+
+        # Concatenate.
+        feature = torch.cat((lower_neck_feature, top_down_hori_feature), dim=1)
+
+        # Apply dconv3x3.
+        feature = self.dconv3x3(feature)
+
+        # Apply conv1x1.
+        return self.vert_double_conv1x1(feature)
 
 
 class PanNeck(nn.Module):
 
     @classmethod
-    def build_step1_conv_blocks(
-        cls,
-        in_channels_group: Sequence[int],
-        out_channels: int,
-    ):
-        step1_conv_blocks: List[nn.Module] = []
-        for in_channels in in_channels_group:
-            step1_conv_blocks.append(
-                build_conv1x1_block(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
+    def build_top_down_blocks(cls, in_channels_group: Sequence[int]):
+        top_down_top_block: Optional[nn.Module] = None
+        top_down_normal_blocks: List[nn.Module] = []
+
+        last_idx = len(in_channels_group) - 1
+        for idx in range(last_idx + 1):
+            is_top = (idx == last_idx)
+            is_bottom = (idx == 0)
+
+            upper_channels = in_channels_group[idx]
+
+            if is_bottom:
+                lower_channels = upper_channels
+            else:
+                lower_channels = in_channels_group[idx - 1]
+
+            if is_top:
+                top_down_top_block = PanNeckTopDownTopBlock(
+                    upper_channels=upper_channels,
+                    lower_channels=lower_channels,
                 )
-            )
-        return nn.ModuleList(step1_conv_blocks)
+            else:
+                top_down_normal_blocks.append(
+                    PanNeckTopDownNormalBlock(
+                        upper_channels=upper_channels,
+                        lower_channels=lower_channels,
+                        is_bottom=is_bottom,
+                    )
+                )
+
+        assert top_down_top_block is not None
+        top_down_normal_blocks = list(reversed(top_down_normal_blocks))
+
+        return top_down_top_block, nn.ModuleList(top_down_normal_blocks)
 
     @classmethod
-    def build_step2_conv_blocks(
-        cls,
-        in_channels_group: Sequence[int],
-        out_channels: int,
-    ):
-        step2_conv_blocks: List[nn.Module] = []
-        for _ in in_channels_group:
-            step2_conv_blocks.append(
-                build_conv3x3_block(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
+    def build_bottom_up_blocks(cls, in_channels_group: Sequence[int]):
+        bottom_up_blocks: List[nn.Module] = []
+        last_idx = len(in_channels_group) - 1
+        for idx in range(last_idx):
+            upper_channels = in_channels_group[idx + 1]
+            lower_channels = in_channels_group[idx]
+            bottom_up_blocks.append(
+                PanNeckBottomUpBlock(
+                    upper_channels=upper_channels,
+                    lower_channels=lower_channels,
                 )
             )
-        return nn.ModuleList(step2_conv_blocks)
+        return nn.ModuleList(bottom_up_blocks)
 
-    @classmethod
-    def build_step3_conv_blocks(
-        cls,
-        in_channels_group: Sequence[int],
-        out_channels: int,
-    ):
-        step3_conv_blocks: List[nn.Module] = []
-        for idx, _ in enumerate(in_channels_group):
-            if idx >= len(in_channels_group) - 1:
-                break
-            step3_conv_blocks.append(
-                build_pconv2x2_block(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
-                )
-            )
-        return nn.ModuleList(step3_conv_blocks)
-
-    @classmethod
-    def build_step4_conv_blocks(
-        cls,
-        in_channels_group: Sequence[int],
-        out_channels: int,
-    ):
-        step4_conv_blocks: List[nn.Module] = []
-        for idx, _ in enumerate(in_channels_group):
-            if idx == 0:
-                continue
-            step4_conv_blocks.append(
-                build_conv3x3_block(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
-                )
-            )
-        return nn.ModuleList(step4_conv_blocks)
-
-    def __init__(
-        self,
-        in_channels_group: Sequence[int],
-        out_channels: int,
-    ) -> None:
+    def __init__(self, in_channels_group: Sequence[int]):
         super().__init__()
 
         assert len(in_channels_group) > 1
+        (
+            self.top_down_top_block,
+            self.top_down_normal_blocks,
+        ) = self.build_top_down_blocks(in_channels_group)
 
-        # Top-down.
-        self.step1_conv_blocks = self.build_step1_conv_blocks(
-            in_channels_group=in_channels_group,
-            out_channels=out_channels,
-        )
-        self.step2_conv_blocks = self.build_step2_conv_blocks(
-            in_channels_group=in_channels_group,
-            out_channels=out_channels,
-        )
-        assert len(self.step1_conv_blocks) == len(self.step2_conv_blocks)
-
-        # Bottom-up.
-        self.step3_conv_blocks = self.build_step3_conv_blocks(
-            in_channels_group=in_channels_group,
-            out_channels=out_channels,
-        )
-        self.step4_conv_blocks = self.build_step4_conv_blocks(
-            in_channels_group=in_channels_group,
-            out_channels=out_channels,
-        )
-        assert len(self.step3_conv_blocks) == len(self.step4_conv_blocks)
+        self.bottom_up_blocks = self.build_bottom_up_blocks(in_channels_group)
 
         for module in self.modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
@@ -155,39 +228,81 @@ class PanNeck(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    def forward(self, features: List[torch.Tensor]) -> List[torch.Tensor]:  # type: ignore
-        num_features = len(features)
-        assert num_features == len(self.step1_conv_blocks)
+    def forward(self, backbone_features: List[torch.Tensor]) -> List[torch.Tensor]:  # type: ignore
+        assert len(backbone_features) - 1 == len(self.top_down_normal_blocks)
 
-        # Step 1. (top-down)
-        outputs = [
-            step1_conv_block(features[feature_idx])
-            for feature_idx, step1_conv_block in enumerate(self.step1_conv_blocks)
-        ]
+        # Top-down path.
+        top_down_hori_features: List[torch.Tensor] = []
 
-        # Upsampling & add to the previous layer.
-        for feature_idx in range(num_features - 1, 0, -1):
-            prev_feature_idx = feature_idx - 1
-            feature = outputs[feature_idx]
-            height = feature.shape[-2]
-            width = feature.shape[-1]
-            outputs[prev_feature_idx] += F.interpolate(
-                outputs[feature_idx],
-                size=(height * 2, width * 2),
-                mode='nearest',
+        (
+            upper_neck_feature,
+            top_down_hori_feature,
+        ) = self.top_down_top_block(backbone_feature=backbone_features[-1])
+
+        top_down_hori_features.append(top_down_hori_feature)
+
+        for top_down_normal_block_idx, top_down_normal_block in \
+                enumerate(self.top_down_normal_blocks, start=2):
+            assert upper_neck_feature is not None
+            (
+                upper_neck_feature,
+                top_down_hori_feature,
+            ) = top_down_normal_block(
+                upper_neck_feature=upper_neck_feature,
+                backbone_feature=backbone_features[-top_down_normal_block_idx],
             )
+            top_down_hori_features.append(top_down_hori_feature)
 
-        # Step 2. (top-down)
-        for feature_idx, step2_conv_block in enumerate(self.step2_conv_blocks):
-            outputs[feature_idx] = step2_conv_block(outputs[feature_idx])
+        assert len(top_down_hori_features) == len(backbone_features)
+        assert len(top_down_hori_features) - 1 == len(self.bottom_up_blocks)
 
-        # Step 3. (bottom-up)
-        for feature_idx, step3_conv_block in enumerate(self.step3_conv_blocks):
-            next_feature_idx = feature_idx + 1
-            outputs[next_feature_idx] += step3_conv_block(outputs[feature_idx])
+        # Bottom-up path.
+        output_features: List[torch.Tensor] = []
 
-        # Step 4. (bottom-up)
-        for feature_idx, step4_conv_block in enumerate(self.step4_conv_blocks, start=1):
-            outputs[feature_idx] = step4_conv_block(outputs[feature_idx])
+        lower_neck_feature = top_down_hori_features.pop()
+        output_features.append(lower_neck_feature)
 
-        return outputs
+        for bottom_up_block in self.bottom_up_blocks:
+            top_down_hori_feature = top_down_hori_features.pop()
+            lower_neck_feature = bottom_up_block(
+                lower_neck_feature=lower_neck_feature,
+                top_down_hori_feature=top_down_hori_feature,
+            )
+            output_features.append(lower_neck_feature)
+
+        return output_features
+
+
+class PanHead(nn.Module):
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        init_output_bias: float = 0.0,
+    ):
+        super().__init__()
+
+        self.step1_conv = nn.Sequential(
+            build_dconv3x3_and_double_conv1x1_block(in_channels=in_channels),
+            build_dconv3x3_and_double_conv1x1_block(in_channels=in_channels),
+        )
+        self.step2_conv = build_double_conv1x1_block(
+            in_channels=in_channels,
+            out_channels=out_channels,
+        )
+
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_normal_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+        nn.init.constant_(self.step2_conv[0].bias, 0.0)  # type: ignore
+        nn.init.constant_(self.step2_conv[2].bias, init_output_bias)  # type: ignore
+
+    def forward(self, neck_feature: torch.Tensor) -> torch.Tensor:  # type: ignore
+        x = neck_feature
+        x = self.step1_conv(x)
+        x = self.step2_conv(x)
+        return x
