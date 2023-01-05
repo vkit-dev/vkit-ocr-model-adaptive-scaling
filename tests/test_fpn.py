@@ -11,6 +11,7 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
 from thop import profile, clever_format
+
 from vkit_open_model.model.fpn import FpnNeck, FpnHead
 
 
