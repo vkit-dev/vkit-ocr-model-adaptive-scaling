@@ -11,6 +11,7 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
 import iolite as io
+
 from vkit_open_model.model.convnext import ConvNext
 
 

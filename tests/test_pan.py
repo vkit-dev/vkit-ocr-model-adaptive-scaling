@@ -10,6 +10,8 @@
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
+from thop import profile, clever_format
+
 from vkit_open_model.model.pan import (
     PanNeckTopDownTopBlock,
     PanNeckTopDownNormalBlock,
@@ -72,6 +74,18 @@ def test_pan_neck():
     for output, feature in zip(outputs, features):
         assert output.shape == feature.shape
     del model_jit
+
+
+def profile_pan_neck():
+    neck = PanNeck(in_channels_group=(96, 192, 384, 768))
+    features = [
+        torch.rand(1, 96, 80, 80),
+        torch.rand(1, 192, 40, 40),
+        torch.rand(1, 384, 20, 20),
+        torch.rand(1, 768, 10, 10),
+    ]
+    macs, params = clever_format(profile(neck, inputs=(features,), verbose=False), "%.3f")
+    print(f'params: {params}, macs: {macs}')
 
 
 def test_pan_head():
