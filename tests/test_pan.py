@@ -12,17 +12,17 @@
 import torch
 from thop import profile, clever_format
 
-from vkit_open_model.model.pan import (
-    PanNeckTopDownTopBlock,
-    PanNeckTopDownNormalBlock,
-    PanNeckBottomUpBlock,
-    PanNeck,
-    PanHead,
+from vkit_open_model.model.pan_heavy import (
+    PanHeavyNeckTopDownTopBlock,
+    PanHeavyNeckTopDownNormalBlock,
+    PanHeavyNeckBottomUpBlock,
+    PanHeavyNeck,
+    PanHeavyHead,
 )
 
 
-def test_pan_top_down_head_block():
-    block = PanNeckTopDownTopBlock(upper_channels=256, lower_channels=128)
+def test_pan_heavy_top_down_head_block():
+    block = PanHeavyNeckTopDownTopBlock(upper_channels=256, lower_channels=128)
     model_jit = torch.jit.script(block)  # type: ignore
     assert model_jit
 
@@ -32,8 +32,8 @@ def test_pan_top_down_head_block():
     assert (x0 == x1).sum() == 0
 
 
-def test_pan_top_down_normal_block():
-    block = PanNeckTopDownNormalBlock(upper_channels=256, lower_channels=128, is_bottom=False)
+def test_pan_heavy_top_down_normal_block():
+    block = PanHeavyNeckTopDownNormalBlock(upper_channels=256, lower_channels=128, is_bottom=False)
     model_jit = torch.jit.script(block)  # type: ignore
     assert model_jit
 
@@ -43,8 +43,8 @@ def test_pan_top_down_normal_block():
     assert (x0 == x1).sum() == 0
 
 
-def test_pan_neck_bottom_up_block():
-    block = PanNeckBottomUpBlock(lower_channels=128, upper_channels=256)
+def test_pan_heavy_neck_bottom_up_block():
+    block = PanHeavyNeckBottomUpBlock(lower_channels=128, upper_channels=256)
     model_jit = torch.jit.script(block)  # type: ignore
     assert model_jit
 
@@ -52,8 +52,8 @@ def test_pan_neck_bottom_up_block():
     assert output.shape == (1, 256, 5, 5)
 
 
-def test_pan_neck():
-    neck = PanNeck(in_channels_group=(96, 192, 384, 768))
+def test_pan_heavy_neck():
+    neck = PanHeavyNeck(in_channels_group=(96, 192, 384, 768))
     features = [
         torch.rand(1, 96, 80, 80),
         torch.rand(1, 192, 40, 40),
@@ -76,8 +76,8 @@ def test_pan_neck():
     del model_jit
 
 
-def profile_pan_neck():
-    neck = PanNeck(in_channels_group=(96, 192, 384, 768))
+def profile_pan_heavy_neck():
+    neck = PanHeavyNeck(in_channels_group=(96, 192, 384, 768))
     features = [
         torch.rand(1, 96, 80, 80),
         torch.rand(1, 192, 40, 40),
@@ -88,8 +88,8 @@ def profile_pan_neck():
     print(f'params: {params}, macs: {macs}')
 
 
-def test_pan_head():
-    head = PanHead(in_channels=192, out_channels=4, init_output_bias=10.0)
+def test_pan_heavy_head():
+    head = PanHeavyHead(in_channels=192, out_channels=4, init_output_bias=10.0)
     output = head(torch.rand(1, 192, 40, 40))
     assert output.shape == (1, 4, 40, 40)
     assert 9.0 <= output.mean() <= 11.0

@@ -48,7 +48,7 @@ def build_dconv3x3_and_double_conv1x1_block(in_channels: int):
     )
 
 
-class PanNeckTopDownTopBlock(nn.Module):
+class PanHeavyNeckTopDownTopBlock(nn.Module):
 
     def __init__(self, upper_channels: int, lower_channels: int):
         super().__init__()
@@ -72,7 +72,7 @@ class PanNeckTopDownTopBlock(nn.Module):
         )
 
 
-class PanNeckTopDownNormalBlock(nn.Module):
+class PanHeavyNeckTopDownNormalBlock(nn.Module):
 
     def __init__(self, upper_channels: int, lower_channels: int, is_bottom: bool):
         super().__init__()
@@ -126,7 +126,7 @@ class PanNeckTopDownNormalBlock(nn.Module):
         return lower_neck_feature, bottom_up_neck_feature
 
 
-class PanNeckBottomUpBlock(nn.Module):
+class PanHeavyNeckBottomUpBlock(nn.Module):
 
     def __init__(self, upper_channels: int, lower_channels: int):
         super().__init__()
@@ -158,7 +158,7 @@ class PanNeckBottomUpBlock(nn.Module):
         return self.vert_double_conv1x1(feature)
 
 
-class PanNeck(nn.Module):
+class PanHeavyNeck(nn.Module):
 
     @classmethod
     def build_top_down_blocks(cls, in_channels_group: Sequence[int]):
@@ -178,13 +178,13 @@ class PanNeck(nn.Module):
                 lower_channels = in_channels_group[idx - 1]
 
             if is_top:
-                top_down_top_block = PanNeckTopDownTopBlock(
+                top_down_top_block = PanHeavyNeckTopDownTopBlock(
                     upper_channels=upper_channels,
                     lower_channels=lower_channels,
                 )
             else:
                 top_down_normal_blocks.append(
-                    PanNeckTopDownNormalBlock(
+                    PanHeavyNeckTopDownNormalBlock(
                         upper_channels=upper_channels,
                         lower_channels=lower_channels,
                         is_bottom=is_bottom,
@@ -204,7 +204,7 @@ class PanNeck(nn.Module):
             upper_channels = in_channels_group[idx + 1]
             lower_channels = in_channels_group[idx]
             bottom_up_blocks.append(
-                PanNeckBottomUpBlock(
+                PanHeavyNeckBottomUpBlock(
                     upper_channels=upper_channels,
                     lower_channels=lower_channels,
                 )
@@ -273,7 +273,7 @@ class PanNeck(nn.Module):
         return output_features
 
 
-class PanHead(nn.Module):
+class PanHeavyHead(nn.Module):
 
     def __init__(
         self,
