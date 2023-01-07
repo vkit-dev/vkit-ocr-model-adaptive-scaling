@@ -179,6 +179,8 @@ class PanNeck(nn.Module):
     def __init__(self, in_channels_group: Sequence[int]):
         super().__init__()
 
+        self.in_channels_group = in_channels_group
+
         assert len(in_channels_group) > 1
         (
             self.top_down_top_block,

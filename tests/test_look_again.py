@@ -9,24 +9,29 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-# Backbone.
-from .convnext import ConvNext
+import torch
 
-# Neck & Head.
-from .upernext import UperNextNeck, UperNextHead
-from .fpn import FpnNeck, FpnHead
-from .pan_heavy import PanHeavyNeck, PanHeavyHead
-from .pan import PanNeck, PanHead
-
-# Scope-based model.
-from .adaptive_scaling import (
-    AdaptiveScalingSize,
-    AdaptiveScalingNeckHeadType,
-    AdaptiveScalingConfig,
-    AdaptiveScaling,
-)
-from .look_again import (
+from vkit_open_model.model import (
     LookAgainSize,
     LookAgainConfig,
     LookAgain,
 )
+
+
+def test_look_again():
+    model = LookAgain(LookAgainConfig())
+
+    print('forward_rough')
+    x = torch.rand(1, 3, 320, 320)
+    rough_classification_logits, rough_char_scale_logits = model.forward_rough(x)
+    assert rough_classification_logits.shape == (1, 3, 80, 80)
+    assert rough_char_scale_logits.shape == (1, 1, 80, 80)
+
+    print('jit forward_rough')
+    model_jit = torch.jit.script(model)  # type: ignore
+    del model
+    rough_classification_logits, rough_char_scale_logits = \
+        model_jit.forward_rough(x)  # type: ignore
+    assert rough_classification_logits.shape == (1, 3, 80, 80)
+    assert rough_char_scale_logits.shape == (1, 1, 80, 80)
+    del model_jit
