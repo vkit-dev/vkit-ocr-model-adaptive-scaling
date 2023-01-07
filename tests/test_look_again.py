@@ -20,7 +20,7 @@ def test_look_again():
     print('forward_rough')
     x = torch.rand(1, 3, 320, 320)
     rough_classification_logits, rough_char_scale_logits = model.forward_rough(x)
-    assert rough_classification_logits.shape == (1, 3, 80, 80)
+    assert rough_classification_logits.shape == (1, 2, 80, 80)
     assert rough_char_scale_logits.shape == (1, 1, 80, 80)
 
     print('forward_precise')
@@ -48,7 +48,7 @@ def test_look_again():
     del model
     rough_classification_logits, rough_char_scale_logits = \
         model_jit.forward_rough(x)  # type: ignore
-    assert rough_classification_logits.shape == (1, 3, 80, 80)
+    assert rough_classification_logits.shape == (1, 2, 80, 80)
     assert rough_char_scale_logits.shape == (1, 1, 80, 80)
 
     print('jit forward_precise')

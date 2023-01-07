@@ -44,8 +44,8 @@ class LookAgainConfig:
     # Mainly for validation and OTA.
     downsampling_factors: Sequence[int] = [4, 8, 16, 32]
     enable_validate_downsampling_factor: bool = True
-    # Logits for [char, seal impression, line]
-    rough_classification_num_classes: int = 3
+    # Logits for [char, seal impression]
+    rough_classification_num_classes: int = 2
     rough_char_scale_head_init_output_bias: float = 8.0
 
 
