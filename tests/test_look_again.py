@@ -11,11 +11,7 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
 
-from vkit_open_model.model import (
-    LookAgainSize,
-    LookAgainConfig,
-    LookAgain,
-)
+from vkit_open_model.model import LookAgainConfig, LookAgain
 
 
 def test_look_again():
@@ -27,6 +23,26 @@ def test_look_again():
     assert rough_classification_logits.shape == (1, 3, 80, 80)
     assert rough_char_scale_logits.shape == (1, 1, 80, 80)
 
+    print('forward_precise')
+    (
+        precise_char_localization_logits_group,
+        precise_char_objectness_logits_group,
+        precise_char_orientation_logits_group,
+    ) = model.forward_precise(x)
+    assert len(precise_char_localization_logits_group) \
+        == len(precise_char_objectness_logits_group) \
+        == len(precise_char_orientation_logits_group) \
+        == 3
+    assert precise_char_localization_logits_group[0].shape == (1, 4, 40, 40)
+    assert precise_char_objectness_logits_group[0].shape == (1, 1, 40, 40)
+    assert precise_char_orientation_logits_group[0].shape == (1, 4, 40, 40)
+    assert precise_char_localization_logits_group[1].shape == (1, 4, 20, 20)
+    assert precise_char_objectness_logits_group[1].shape == (1, 1, 20, 20)
+    assert precise_char_orientation_logits_group[1].shape == (1, 4, 20, 20)
+    assert precise_char_localization_logits_group[2].shape == (1, 4, 10, 10)
+    assert precise_char_objectness_logits_group[2].shape == (1, 1, 10, 10)
+    assert precise_char_orientation_logits_group[2].shape == (1, 4, 10, 10)
+
     print('jit forward_rough')
     model_jit = torch.jit.script(model)  # type: ignore
     del model
@@ -34,4 +50,23 @@ def test_look_again():
         model_jit.forward_rough(x)  # type: ignore
     assert rough_classification_logits.shape == (1, 3, 80, 80)
     assert rough_char_scale_logits.shape == (1, 1, 80, 80)
-    del model_jit
+
+    print('jit forward_precise')
+    (
+        precise_char_localization_logits_group,
+        precise_char_objectness_logits_group,
+        precise_char_orientation_logits_group,
+    ) = model_jit.forward_precise(x)  # type: ignore
+    assert len(precise_char_localization_logits_group) \
+        == len(precise_char_objectness_logits_group) \
+        == len(precise_char_orientation_logits_group) \
+        == 3
+    assert precise_char_localization_logits_group[0].shape == (1, 4, 40, 40)
+    assert precise_char_objectness_logits_group[0].shape == (1, 1, 40, 40)
+    assert precise_char_orientation_logits_group[0].shape == (1, 4, 40, 40)
+    assert precise_char_localization_logits_group[1].shape == (1, 4, 20, 20)
+    assert precise_char_objectness_logits_group[1].shape == (1, 1, 20, 20)
+    assert precise_char_orientation_logits_group[1].shape == (1, 4, 20, 20)
+    assert precise_char_localization_logits_group[2].shape == (1, 4, 10, 10)
+    assert precise_char_objectness_logits_group[2].shape == (1, 1, 10, 10)
+    assert precise_char_orientation_logits_group[2].shape == (1, 4, 10, 10)

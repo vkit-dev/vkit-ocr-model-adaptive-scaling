@@ -98,13 +98,13 @@ class LookAgain(nn.Module):
             # Use the 1/8, 1/16, and 1/32 levels.
             for in_channels in self.neck.in_channels_group[1:]
         ])
-        self.precise_char_localization_head = nn.ModuleList([
+        self.precise_char_localization_heads = nn.ModuleList([
             PanHead(in_channels=head_in_channels, out_channels=4) for _ in self.precise_stems
         ])
-        self.precise_char_objectness_head = nn.ModuleList([
+        self.precise_char_objectness_heads = nn.ModuleList([
             PanHead(in_channels=head_in_channels, out_channels=1) for _ in self.precise_stems
         ])
-        self.precise_char_orientation_head = nn.ModuleList([
+        self.precise_char_orientation_heads = nn.ModuleList([
             PanHead(in_channels=head_in_channels, out_channels=4) for _ in self.precise_stems
         ])
 
@@ -146,18 +146,59 @@ class LookAgain(nn.Module):
 
         return rough_classification_logits, rough_char_scale_logits
 
-    # @torch.jit.export  # type: ignore
-    # def forward_precise(
-    #     self,
-    #     x: torch.Tensor,
-    # ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    #     backbone_features = self.backbone(x)
-    #     neck_features = self.neck(backbone_features)
+    # NOTE: Can't use Sequence here.
+    @torch.jit.export  # type: ignore
+    def forward_precise(
+        self,
+        x: torch.Tensor,
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+        backbone_features = self.backbone(x)
+        neck_features = self.neck(backbone_features)
 
-    #     precise_char_localization_logits_group: List[torch.Tensor] = []
-    #     precise_char_objectness_logits_group: List[torch.Tensor] = []
-    #     precise_char_orientation_logits_group: List[torch.Tensor] = []
+        precise_char_localization_logits_group: List[torch.Tensor] = []
+        precise_char_objectness_logits_group: List[torch.Tensor] = []
+        precise_char_orientation_logits_group: List[torch.Tensor] = []
 
-    #     for neck_feature_idx, precise_stem in enumerate(self.precise_stems, start=1):
-    #         # Use the 1/8, 1/16, and 1/32 levels.
-    #         precise_stem_feature = precise_stem(neck_features[neck_feature_idx + 1])
+        # NOTE: This for loop is design for JIT.
+        for (
+            neck_feature_idx,
+            (
+                precise_stem,
+                precise_char_localization_head,
+                precise_char_objectness_head,
+                precise_char_orientation_head,
+            ),
+        ) in enumerate(
+            zip(
+                self.precise_stems,
+                self.precise_char_localization_heads,
+                self.precise_char_objectness_heads,
+                self.precise_char_orientation_heads,
+            ),
+            start=1,
+        ):
+            # Use the 1/8, 1/16, and 1/32 levels.
+            precise_stem_feature = precise_stem(neck_features[neck_feature_idx])
+
+            if self._jit_enable_validate_downsampling_factor:
+                self.validate_downsampling_factor(
+                    original_tensor=x,
+                    downsampled_tensor=precise_stem_feature,
+                    downsampling_factor=self._jit_downsampling_factors[neck_feature_idx],
+                )
+
+            precise_char_localization_logits_group.append(
+                precise_char_localization_head(precise_stem_feature)
+            )
+            precise_char_objectness_logits_group.append(
+                precise_char_objectness_head(precise_stem_feature)
+            )
+            precise_char_orientation_logits_group.append(
+                precise_char_orientation_head(precise_stem_feature)
+            )
+
+        return (
+            precise_char_localization_logits_group,
+            precise_char_objectness_logits_group,
+            precise_char_orientation_logits_group,
+        )
