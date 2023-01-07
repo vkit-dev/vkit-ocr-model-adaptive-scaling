@@ -322,7 +322,8 @@ def train(
         optimizer.load_state_dict(restore_state.optimizer_state_dict)  # type: ignore
 
         optimizer_scheduler_state_dict = dict(restore_state.optimizer_scheduler_state_dict)
-        if optimizer_scheduler_state_dict['base_lrs'] != [optimizer_config.adamw_lr]:
+        if optimizer_scheduler_state_dict['base_lrs'] != \
+                [optimizer_config.adamw_lr]:  # type: ignore
             logger.info('Patching base_lrs')
             optimizer_scheduler_state_dict['base_lrs'] = [optimizer_config.adamw_lr]  # type: ignore
         eta_min = optimizer_config.cosine_annealing_warm_restarts_eta_min

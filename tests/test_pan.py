@@ -19,6 +19,7 @@ from vkit_open_model.model.pan_heavy import (
     PanHeavyNeck,
     PanHeavyHead,
 )
+from vkit_open_model.model.pan import PanNeck, PanHead
 
 
 def test_pan_heavy_top_down_head_block():
@@ -97,3 +98,53 @@ def test_pan_heavy_head():
     model_jit = torch.jit.script(head)  # type: ignore
     assert model_jit
     del model_jit, head
+
+
+def profile_pan_heavy_head():
+    head = PanHeavyHead(in_channels=192, out_channels=4, init_output_bias=10.0)
+    x = torch.rand(1, 192, 40, 40)
+    macs, params = clever_format(profile(head, inputs=(x,), verbose=False), "%.3f")
+    print(f'params: {params}, macs: {macs}')
+
+
+def test_pan_neck():
+    neck = PanNeck(in_channels_group=(96, 192, 384, 768))
+    features = [
+        torch.rand(1, 96, 80, 80),
+        torch.rand(1, 192, 40, 40),
+        torch.rand(1, 384, 20, 20),
+        torch.rand(1, 768, 10, 10),
+    ]
+    outputs = neck(features)
+    assert len(outputs) == len(features)
+    for output, feature in zip(outputs, features):
+        assert output.shape == feature.shape
+
+    model_jit = torch.jit.script(neck)  # type: ignore
+    assert model_jit
+    del neck
+
+    outputs = model_jit(features)  # type: ignore
+    assert len(outputs) == len(features)
+    for output, feature in zip(outputs, features):
+        assert output.shape == feature.shape
+    del model_jit
+
+
+def profile_pan_neck():
+    neck = PanNeck(in_channels_group=(96, 192, 384, 768))
+    features = [
+        torch.rand(1, 96, 80, 80),
+        torch.rand(1, 192, 40, 40),
+        torch.rand(1, 384, 20, 20),
+        torch.rand(1, 768, 10, 10),
+    ]
+    macs, params = clever_format(profile(neck, inputs=(features,), verbose=False), "%.3f")
+    print(f'params: {params}, macs: {macs}')
+
+
+def profile_pan_head():
+    head = PanHead(in_channels=192, out_channels=4, init_output_bias=10.0)
+    x = torch.rand(1, 192, 40, 40)
+    macs, params = clever_format(profile(head, inputs=(x,), verbose=False), "%.3f")
+    print(f'params: {params}, macs: {macs}')
