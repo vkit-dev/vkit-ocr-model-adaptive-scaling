@@ -9,7 +9,7 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
-from typing import Tuple, List, Sequence
+from typing import Tuple, List, Sequence, Dict
 from enum import Enum, unique
 import logging
 
@@ -99,6 +99,7 @@ class LookAgain(nn.Module):
             for in_channels in self.neck.in_channels_group[1:]
         ])
         self.precise_char_localization_heads = nn.ModuleList([
+            # (y, x, h, w).
             PanHead(in_channels=head_in_channels, out_channels=4) for _ in self.precise_stems
         ])
         self.precise_char_objectness_heads = nn.ModuleList([
@@ -201,4 +202,164 @@ class LookAgain(nn.Module):
             precise_char_localization_logits_group,
             precise_char_objectness_logits_group,
             precise_char_orientation_logits_group,
+        )
+
+
+class LookAgainPostProcessing:
+
+    def __init__(self, downsampling_factors: Sequence[int]):
+        self.downsampling_factors = downsampling_factors
+        # int -> (1, H, W, 2)
+        self.downsampling_factor_to_char_localization_offset: Dict[int, torch.Tensor] = {}
+
+    def get_char_localization_offset(
+        self,
+        downsampling_factor: int,
+        precise_char_localization_logits: torch.Tensor,
+    ):
+        df_to_offset = self.downsampling_factor_to_char_localization_offset
+
+        target_height, target_width = precise_char_localization_logits.shape[-2:]
+        if downsampling_factor not in df_to_offset \
+                or df_to_offset[downsampling_factor].shape != (1, target_height, target_width):
+            # (H, W)
+            offset_y, offset_x = torch.meshgrid(
+                torch.arange(target_height),
+                torch.arange(target_width),
+                indexing='ij',
+            )
+            # (H, W, 2), offset[y][x] -> (y, x)
+            offset = torch.dstack((offset_y, offset_x))
+            # (1, H, W, 2)
+            offset = offset.unsqueeze(0)
+            # Update.
+            df_to_offset[downsampling_factor] = offset
+
+        target_device = precise_char_localization_logits.device
+        if df_to_offset[downsampling_factor].device != target_device:
+            # Udpate device.
+            offset = df_to_offset[downsampling_factor]
+            df_to_offset[downsampling_factor] = offset.to(target_device)
+
+        return df_to_offset[downsampling_factor]
+
+    def transform_precise_outputs(
+        self,
+        precise_char_localization_logits_group: Sequence[torch.Tensor],
+        precise_char_objectness_logits_group: Sequence[torch.Tensor],
+        precise_char_orientation_logits_group: Sequence[torch.Tensor],
+    ):
+        assert len(self.downsampling_factors) \
+            == len(precise_char_localization_logits_group) \
+            == len(precise_char_objectness_logits_group) \
+            == len(precise_char_orientation_logits_group)
+
+        # For i = 1 to 3.
+        # [ (B, Ai, 4), ... ]
+        precise_char_localization_bounding_boxes_group: List[torch.Tensor] = []
+        # [ (B, Ai, 1), ... ]
+        precise_char_objectness_flatten_logits_group: List[torch.Tensor] = []
+        precise_char_objectness_probs_group: List[torch.Tensor] = []
+        # [ (B, Ai, 4), ... ]
+        precise_char_orientation_flatten_logits_group: List[torch.Tensor] = []
+
+        for (
+            # D
+            downsampling_factor,
+            # (B, 4, H, W)
+            precise_char_localization_logits,
+            # (B, 1, H, W)
+            precise_char_objectness_logits,
+            # (B, 4, H, W)
+            precise_char_orientation_logits,
+        ) in zip(
+            self.downsampling_factors,
+            precise_char_localization_logits_group,
+            precise_char_objectness_logits_group,
+            precise_char_orientation_logits_group,
+        ):
+            assert precise_char_localization_logits.shape[-2:] \
+                == precise_char_objectness_logits.shape[-2:] \
+                == precise_char_orientation_logits.shape[-2:]
+
+            batch_size = precise_char_localization_logits.shape[0]
+            assert batch_size \
+                == precise_char_objectness_logits.shape[0] \
+                == precise_char_orientation_logits.shape[0]
+
+            # 1. Transform localization result.
+            # (1, H, W, 2)
+            char_localization_offset = self.get_char_localization_offset(
+                downsampling_factor,
+                precise_char_localization_logits,
+            )
+            # -> (1, H * W, 2)
+            char_localization_offset = char_localization_offset.view(1, -1, 2)
+
+            # -> (B, H, W, 4)
+            precise_char_localization_logits = precise_char_localization_logits.permute(0, 2, 3, 1)
+            # -> (B, H * W, 4), 4 for (y, x, h, w)
+            precise_char_localization_logits = \
+                precise_char_localization_logits.view(batch_size, -1, 4)
+
+            # Transform the center point.
+            precise_char_localization_logits[..., :2] = \
+                (precise_char_localization_logits[..., :2] + char_localization_offset) \
+                * downsampling_factor
+            # Transform the shape of bounding box,
+            precise_char_localization_logits[..., 2:] = \
+                torch.exp(precise_char_localization_logits[..., 2:]) * downsampling_factor
+
+            # Keep the transformed bounding boxes.
+            precise_char_localization_bounding_boxes_group.append(precise_char_localization_logits)
+
+            # 2. Transform objectness result.
+            # -> (B, H, W, 1)
+            precise_char_objectness_logits = precise_char_objectness_logits.permute(0, 2, 3, 1)
+            # -> (B, H * W, 1)
+            precise_char_objectness_logits = \
+                precise_char_objectness_logits.view(batch_size, -1, 1)
+
+            # Keep the flatten logits and the transformed probs.
+            precise_char_objectness_flatten_logits_group.append(precise_char_objectness_logits)
+            precise_char_objectness_probs_group.append(precise_char_objectness_logits.sigmoid())
+
+            # 3. Transform orientation result.
+            # -> (B, H, W, 4)
+            precise_char_orientation_logits = precise_char_orientation_logits.permute(0, 2, 3, 1)
+            # -> (B, H * W, 4), 4 for (up, down, left, right) logits.
+            precise_char_orientation_logits = \
+                precise_char_orientation_logits.view(batch_size, -1, 4)
+
+            # Keep only the flatten logits.
+            precise_char_orientation_flatten_logits_group.append(precise_char_orientation_logits)
+
+        # Combine.
+        # A = SUM(Ai)
+        # (B, A, 4)
+        precise_char_localization_bounding_boxes = torch.cat(
+            precise_char_localization_bounding_boxes_group,
+            dim=1,
+        )
+        # (B, A, 1)
+        precise_char_objectness_flatten_logits = torch.cat(
+            precise_char_objectness_flatten_logits_group,
+            dim=1,
+        )
+        # (B, A, 1)
+        precise_char_objectness_probs = torch.cat(
+            precise_char_objectness_probs_group,
+            dim=1,
+        )
+        # (B, A, 4)
+        precise_char_orientation_flatten_logits = torch.cat(
+            precise_char_orientation_flatten_logits_group,
+            dim=1,
+        )
+
+        return (
+            precise_char_localization_bounding_boxes,
+            precise_char_objectness_flatten_logits,
+            precise_char_objectness_probs,
+            precise_char_orientation_flatten_logits,
         )

@@ -11,7 +11,7 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
 
-from vkit_open_model.model import LookAgainConfig, LookAgain
+from vkit_open_model.model import LookAgainConfig, LookAgain, LookAgainPostProcessing
 
 
 def test_look_again():
@@ -70,3 +70,30 @@ def test_look_again():
     assert precise_char_localization_logits_group[2].shape == (1, 4, 10, 10)
     assert precise_char_objectness_logits_group[2].shape == (1, 1, 10, 10)
     assert precise_char_orientation_logits_group[2].shape == (1, 4, 10, 10)
+
+
+def test_look_again_post_processing():
+    model = LookAgain(LookAgainConfig())
+    model_post_processing = LookAgainPostProcessing(model.config.downsampling_factors[1:])
+
+    x = torch.rand(1, 3, 320, 320)
+    (
+        precise_char_localization_logits_group,
+        precise_char_objectness_logits_group,
+        precise_char_orientation_logits_group,
+    ) = model.forward_precise(x)
+
+    (
+        precise_char_localization_bounding_boxes,
+        precise_char_objectness_flatten_logits,
+        precise_char_objectness_probs,
+        precise_char_orientation_flatten_logits,
+    ) = model_post_processing.transform_precise_outputs(
+        precise_char_localization_logits_group=precise_char_localization_logits_group,
+        precise_char_objectness_logits_group=precise_char_objectness_logits_group,
+        precise_char_orientation_logits_group=precise_char_orientation_logits_group,
+    )
+    assert precise_char_localization_bounding_boxes.shape == (1, 2100, 4)
+    assert precise_char_objectness_flatten_logits.shape == (1, 2100, 1)
+    assert precise_char_objectness_probs.shape == (1, 2100, 1)
+    assert precise_char_orientation_flatten_logits.shape == (1, 2100, 4)

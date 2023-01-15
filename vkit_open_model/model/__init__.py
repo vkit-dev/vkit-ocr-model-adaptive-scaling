@@ -29,4 +29,5 @@ from .look_again import (
     LookAgainSize,
     LookAgainConfig,
     LookAgain,
+    LookAgainPostProcessing,
 )
