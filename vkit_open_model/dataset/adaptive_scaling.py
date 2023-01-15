@@ -94,7 +94,7 @@ class AdaptiveScalingPipelinePostProcessor(
                 RoughSample(
                     image=cropped_page.page_image,
                     downsampled_shape=downsampled_label.shape,
-                    downsampled_core_box=downsampled_label.core_box,
+                    downsampled_core_box=downsampled_label.target_core_box,
                     downsampled_mask=downsampled_label.page_char_mask,
                     downsampled_score_map=downsampled_label.page_char_height_score_map,
                     rng_state=rng_state,
@@ -118,7 +118,7 @@ class AdaptiveScalingPipelinePostProcessor(
                     RoughSample(
                         image=cropped_page_text_region.page_image,
                         downsampled_shape=downsampled_label.shape,
-                        downsampled_core_box=downsampled_label.core_box,
+                        downsampled_core_box=downsampled_label.target_core_box,
                         downsampled_mask=downsampled_label.page_char_mask,
                         downsampled_score_map=downsampled_label.page_char_height_score_map,
                         rng_state=rng_state,
@@ -135,7 +135,7 @@ class AdaptiveScalingPipelinePostProcessor(
                 PreciseSample(
                     image=cropped_page_text_region.page_image,
                     downsampled_shape=downsampled_label.shape,
-                    downsampled_core_box=downsampled_label.core_box,
+                    downsampled_core_box=downsampled_label.target_core_box,
                     downsampled_mask=downsampled_label.page_char_mask,
                     downsampled_score_map=downsampled_label.page_char_gaussian_score_map,
                     downsampled_page_char_regression_labels=(

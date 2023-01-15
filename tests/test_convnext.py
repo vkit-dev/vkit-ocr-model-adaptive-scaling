@@ -11,6 +11,8 @@
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
 import torch
 import iolite as io
+from thop import profile, clever_format
+
 from vkit_open_model.model.convnext import ConvNext
 
 
@@ -30,6 +32,21 @@ def print_convnext_tiny():
     print(model.features[2])
     # 28589128
     print(get_num_params(model))
+
+
+def print_convnext_small():
+    from torchvision.models.convnext import convnext_small
+    model = convnext_small()
+    # 50223688
+    print(get_num_params(model))
+
+
+def profile_convnext_small():
+    from torchvision.models.convnext import convnext_small
+    model = convnext_small()
+    x = torch.rand(1, 3, 320, 320)
+    macs, params = clever_format(profile(model, inputs=(x,), verbose=False), "%.3f")
+    print(f'params: {params}, macs: {macs}')
 
 
 def print_convnext_base():

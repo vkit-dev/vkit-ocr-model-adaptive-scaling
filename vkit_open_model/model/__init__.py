@@ -9,12 +9,25 @@
 # SSPL distribution, student/academic purposes, hobby projects, internal research
 # projects without external distribution, or other projects where all SSPL
 # obligations can be met. For more information, please see the "LICENSE_SSPL.txt" file.
+# Backbone.
 from .convnext import ConvNext
+
+# Neck & Head.
 from .upernext import UperNextNeck, UperNextHead
 from .fpn import FpnNeck, FpnHead
+from .pan_heavy import PanHeavyNeck, PanHeavyHead
+from .pan import PanNeck, PanHead
+
+# Scope-based model.
 from .adaptive_scaling import (
     AdaptiveScalingSize,
     AdaptiveScalingNeckHeadType,
     AdaptiveScalingConfig,
     AdaptiveScaling,
+)
+from .look_again import (
+    LookAgainSize,
+    LookAgainConfig,
+    LookAgain,
+    LookAgainPostProcessing,
 )
